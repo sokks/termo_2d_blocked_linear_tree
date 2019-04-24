@@ -10,17 +10,23 @@ int main(int argc, char **argv) {
     if (argc >= 6) {
         base_level = atoi(argv[1]);
         max_level  = atoi(argv[2]);
-        filename   = argv[3];
-        n_procs    = atoi(argv[4]);
-        offsets_filename   = argv[5];
+        base_blk_lvl = atoi(argv[3]);
+        max_blk_lvl  = atoi(argv[4]);
+        filename   = argv[5];
+        n_procs    = atoi(argv[6]);
+        offsets_filename   = argv[7];
     }
-    GridInit(base_level, max_level);
+    GridInit(base_level, max_level, base_blk_lvl, max_blk_lvl);
     BlockedLinearTree grid = BlockedLinearTree(&Area::T0);
     while (grid.MarkToRefine()) {
-        grid.DoRefine();
+        grid.RefineBlocks();
+        grid.RefineCells();
     }
-    grid.BuildBlocks();
 
+    // TODO
+    grid.Decompose(n_procs);
+
+    // TODO
     grid.Write(filename);
     grid.WriteOffsets(offsets_filename, n_procs);
 }

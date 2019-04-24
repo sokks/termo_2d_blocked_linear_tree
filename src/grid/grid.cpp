@@ -14,28 +14,31 @@ int    max_lvl;
 int    base_lvl;
 int    base_blk_lvl;
 int    max_blk_lvl;
-int    base_blk_sz;
+int    base_blk_sz; // ширина = высота в ячейках (количество ячеек в блоке = base_blk_sz^2)
 
-void GridInit(int base_level, int max_level, int base_blk_level) {
+void GridInit(int base_level, int max_level, int base_blk_level, int max_blk_level) {
     base_lvl = base_level;
     max_lvl  = max_level;
     base_blk_lvl = base_blk_level;
-    max_blk_lvl  = max_level-(base_level - base_blk_level);
+    max_blk_lvl  = max_blk_level;
     
-
     base_sz  = pow(2, base_lvl);
     base_dx  = (Area::x_end - Area::x_start) / base_sz;
-    base_blk_sz  = base_sz / (base_lvl - base_blk_lvl);
+    int n_blocks_row = pow(2, base_blk_lvl);
+    base_blk_sz  = base_sz / n_blocks_row;
 
     int max_sz = pow(2, max_lvl);
     min_dx  = (Area::x_end - Area::x_start) / max_sz;
 
     cout << "GRID PARAMS INITED" <<
+            "\nbase_lvl=" << base_lvl <<
             "\nmax_lvl=" << max_lvl <<
-            "\nmin_dx=" << min_dx <<
-            "\nbase_lvl=" << base_sz <<
+            "\nbase_blk_lvl=" << base_blk_lvl <<
+            "\nmax_blk_lvl=" << max_blk_lvl <<
+            "\nbase_sz=" << base_sz << endl <<
             "\nbase_dx=" << base_dx <<
-            "\nbase_sz=" << base_sz << endl;
+            "\nbase_blk_sz=" << base_blk_sz <<
+            "\nmin_dx=" << min_dx << endl;
 }
 
 
@@ -79,18 +82,36 @@ void split_ints(GlobalNumber_t c, int *a, int *b) {
     *b = bb;
 }
 
-CellIndex::CellIndex(int _lvl, GlobalNumber_t globalNumber): lvl(_lvl) {
-    std::cout << "new CellIndex(" << lvl << ", " << globalNumber << ")\n";
+void split_ints(GlobalNumber_t c, int max_lvl, int *a, int *b) {
+    int aa = 0;
+    int bb = 0;
+
+    for (int pos = max_lvl - 1; pos >= 0; pos--) {
+        GlobalNumber_t c1 = c & (1 << (pos*2+1));
+        c1 = c1 >> (pos + 1);
+        aa = aa | c1;
+
+        GlobalNumber_t c2 = c & (1 << (pos*2));
+        c2 = c2 >> (pos);
+        bb = bb | c2;
+    }
+
+    *a = aa;
+    *b = bb;
+}
+
+TreeIndex::TreeIndex(int _lvl, GlobalNumber_t globalNumber): lvl(_lvl) {
+    std::cout << "new TreeIndex(" << lvl << ", " << globalNumber << ")\n";
     split_ints(globalNumber, &i, &j);
 }
 
-GlobalNumber_t CellIndex::get_global_number() {
+GlobalNumber_t TreeIndex::get_global_number() {
     // cout << "global_number(" << lvl << "," << i << "," << j << ")=" << merge_ints(i, j) << endl;
     return merge_ints(i, j);
 }
 
-CellIndex CellIndex::get_child(Child c) {
-    CellIndex child;
+TreeIndex TreeIndex::get_child(Child c) {
+    TreeIndex child;
     child.lvl = lvl+1;
     int h = 1 << (max_lvl - child.lvl);
 
@@ -111,15 +132,15 @@ CellIndex CellIndex::get_child(Child c) {
     return child;
 }
 
-CellIndex CellIndex::get_parent() {
-    CellIndex parent;
+TreeIndex TreeIndex::get_parent() {
+    TreeIndex parent;
     parent.lvl = lvl - 1;
     parent.i = i & ~(1 << (max_lvl - lvl));
     parent.j = j & ~(1 << (max_lvl - lvl));
     return parent;
 }
 
-Child CellIndex::get_child_pos() {
+Child TreeIndex::get_child_pos() {
     int hi = i & (1 << (max_lvl - lvl));
     int hj = j & (1 << (max_lvl - lvl));
     if ((hi == 0) && (hj == 0)) {
@@ -137,33 +158,33 @@ Child CellIndex::get_child_pos() {
     return Child::cLD;
 }
 
-CellIndex CellIndex::get_face_neighbor(Neigh n) {
+TreeIndex TreeIndex::get_face_neighbor(Neigh n) {
     int h = 1 << (max_lvl - lvl); // 2^(b-l)
-    CellIndex c;
+    TreeIndex c;
     c.lvl = lvl;
     c.i   = i + ((n == Neigh::DOWN) ? -h : (n == Neigh::UP) ? h : 0);
     c.j   = j + ((n == Neigh::LEFT) ? -h : (n == Neigh::RIGHT) ? h : 0);
     return c;
 }
 
-CellIndex CellIndex::get_corner_neighbor(CornerNeigh n) {
+TreeIndex TreeIndex::get_corner_neighbor(CornerNeigh n) {
     int h = 1 << (max_lvl - lvl - 1); // 2^(b-l)
-    CellIndex c;
+    TreeIndex c;
     c.lvl = lvl;
     c.i   = i + ( ((n == CornerNeigh::LU) || (n == CornerNeigh::LD)) ? -h : h);
     c.j   = j + ( ((n == CornerNeigh::LD) || (n == CornerNeigh::RD)) ? -h : h);
     return c;
 }
 
-vector<CellIndex> CellIndex::get_larger_possible_face_neighbour(Neigh n) {
-    vector<CellIndex> ret;
+vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
+    vector<TreeIndex> ret;
 
     Child my_pos = get_child_pos();
     if (n == Neigh::RIGHT) {
         if ((my_pos == Child::cLD) || (my_pos == Child::cLU)) {
             return ret;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         ret.push_back(c.get_face_neighbor(n));
         return ret;
     }
@@ -172,7 +193,7 @@ vector<CellIndex> CellIndex::get_larger_possible_face_neighbour(Neigh n) {
         if ((my_pos == Child::cRD) || (my_pos == Child::cRU)) {
             return ret;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         ret.push_back(c.get_face_neighbor(n));
         return ret;
     }
@@ -181,7 +202,7 @@ vector<CellIndex> CellIndex::get_larger_possible_face_neighbour(Neigh n) {
         if ((my_pos == Child::cLD) || (my_pos == Child::cRD)) {
             return ret;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         ret.push_back(c.get_face_neighbor(n));
         return ret;
     }
@@ -190,7 +211,7 @@ vector<CellIndex> CellIndex::get_larger_possible_face_neighbour(Neigh n) {
         if ((my_pos == Child::cLU) || (my_pos == Child::cRU)) {
             return ret;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         ret.push_back(c.get_face_neighbor(n));
         return ret;
     }
@@ -198,13 +219,13 @@ vector<CellIndex> CellIndex::get_larger_possible_face_neighbour(Neigh n) {
     return ret;
 }
 
-vector<CellIndex>& CellIndex::get_larger_possible_face_neighbour_optimized(vector<CellIndex>& buf, Neigh n) {
+vector<TreeIndex>& TreeIndex::get_larger_possible_face_neighbour_optimized(vector<TreeIndex>& buf, Neigh n) {
     Child my_pos = get_child_pos();
     if (n == Neigh::RIGHT) {
         if ((my_pos == Child::cLD) || (my_pos == Child::cLU)) {
             return buf;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         buf.push_back(c.get_face_neighbor(n));
         return buf;
     }
@@ -213,7 +234,7 @@ vector<CellIndex>& CellIndex::get_larger_possible_face_neighbour_optimized(vecto
         if ((my_pos == Child::cRD) || (my_pos == Child::cRU)) {
             return buf;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         buf.push_back(c.get_face_neighbor(n));
         return buf;
     }
@@ -222,7 +243,7 @@ vector<CellIndex>& CellIndex::get_larger_possible_face_neighbour_optimized(vecto
         if ((my_pos == Child::cLD) || (my_pos == Child::cRD)) {
             return buf;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         buf.push_back(c.get_face_neighbor(n));
         return buf;
     }
@@ -231,7 +252,7 @@ vector<CellIndex>& CellIndex::get_larger_possible_face_neighbour_optimized(vecto
         if ((my_pos == Child::cLU) || (my_pos == Child::cRU)) {
             return buf;
         }
-        CellIndex c = get_parent();
+        TreeIndex c = get_parent();
         buf.push_back(c.get_face_neighbor(n));
         return buf;
     }
@@ -239,8 +260,8 @@ vector<CellIndex>& CellIndex::get_larger_possible_face_neighbour_optimized(vecto
     return buf;
 }
 
-vector<CellIndex> CellIndex::get_larger_possible_corner_neighbour(CornerNeigh n) {
-    vector<CellIndex> ret;
+vector<TreeIndex> TreeIndex::get_larger_possible_corner_neighbour(CornerNeigh n) {
+    vector<TreeIndex> ret;
 
     Child my_pos = get_child_pos();
     if (n == CornerNeigh::LD) {
@@ -264,14 +285,14 @@ vector<CellIndex> CellIndex::get_larger_possible_corner_neighbour(CornerNeigh n)
         }
     }
 
-    CellIndex c = get_parent();
+    TreeIndex c = get_parent();
     ret.push_back(c.get_corner_neighbor(n));
     return ret;
 }
 
-vector<CellIndex> CellIndex::get_halfsize_possible_face_neighbours(Neigh n) {
-    CellIndex fullSizeNeigh = get_face_neighbor(n);
-    vector<CellIndex> halfSizeNeighs;
+vector<TreeIndex> TreeIndex::get_halfsize_possible_face_neighbours(Neigh n) {
+    TreeIndex fullSizeNeigh = get_face_neighbor(n);
+    vector<TreeIndex> halfSizeNeighs;
     halfSizeNeighs.reserve( 2 );
     if (n == Neigh::DOWN) {
         halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLU));
@@ -296,8 +317,8 @@ vector<CellIndex> CellIndex::get_halfsize_possible_face_neighbours(Neigh n) {
     return halfSizeNeighs;
 }
 
-vector<CellIndex>& CellIndex::get_halfsize_possible_face_neighbours_optimized(vector<CellIndex>& buf, Neigh n) {
-    CellIndex fullSizeNeigh = get_face_neighbor(n);
+vector<TreeIndex>& TreeIndex::get_halfsize_possible_face_neighbours_optimized(vector<TreeIndex>& buf, Neigh n) {
+    TreeIndex fullSizeNeigh = get_face_neighbor(n);
     if (n == Neigh::DOWN) {
         buf.push_back(fullSizeNeigh.get_child(Child::cLU));
         buf.push_back(fullSizeNeigh.get_child(Child::cRU));
@@ -322,9 +343,9 @@ vector<CellIndex>& CellIndex::get_halfsize_possible_face_neighbours_optimized(ve
     return buf;
 }
 
-vector<CellIndex> CellIndex::get_halfsize_possible_corner_neighbours(CornerNeigh n) {
-    CellIndex fullSizeNeigh = get_corner_neighbor(n);
-    vector<CellIndex> halfSizeNeighs;
+vector<TreeIndex> TreeIndex::get_halfsize_possible_corner_neighbours(CornerNeigh n) {
+    TreeIndex fullSizeNeigh = get_corner_neighbor(n);
+    vector<TreeIndex> halfSizeNeighs;
     if (n == CornerNeigh::LU) {
         halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRD));
         return halfSizeNeighs;
@@ -344,8 +365,8 @@ vector<CellIndex> CellIndex::get_halfsize_possible_corner_neighbours(CornerNeigh
     return halfSizeNeighs;
 }
 
-vector<CellIndex> CellIndex::get_all_halfsize_possible_neighs() {
-    vector<CellIndex> res;
+vector<TreeIndex> TreeIndex::get_all_halfsize_possible_neighs() {
+    vector<TreeIndex> res;
     res.reserve( 8 );
 
     if (!is_left_border()) {
@@ -364,7 +385,7 @@ vector<CellIndex> CellIndex::get_all_halfsize_possible_neighs() {
     return res;
 }
 
-vector<CellIndex>& CellIndex::get_all_halfsize_possible_neighs_optimized(vector<CellIndex>& buf) {
+vector<TreeIndex>& TreeIndex::get_all_halfsize_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
         buf = get_halfsize_possible_face_neighbours_optimized(buf, Neigh::LEFT);
@@ -382,8 +403,8 @@ vector<CellIndex>& CellIndex::get_all_halfsize_possible_neighs_optimized(vector<
     return buf;
 }
 
-vector<CellIndex> CellIndex::get_all_samesize_possible_neighs() {
-    vector<CellIndex> res;
+vector<TreeIndex> TreeIndex::get_all_samesize_possible_neighs() {
+    vector<TreeIndex> res;
     res.reserve( 4 );
 
     if (!is_left_border()) {
@@ -402,7 +423,7 @@ vector<CellIndex> CellIndex::get_all_samesize_possible_neighs() {
     return res;
 }
 
-vector<CellIndex>& CellIndex::get_all_samesize_possible_neighs_optimized(vector<CellIndex>& buf) {
+vector<TreeIndex>& TreeIndex::get_all_samesize_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
         buf.push_back(get_face_neighbor(Neigh::LEFT));
@@ -420,8 +441,8 @@ vector<CellIndex>& CellIndex::get_all_samesize_possible_neighs_optimized(vector<
     return buf;
 }
 
-vector<CellIndex> CellIndex::get_all_larger_possible_neighs() {
-    vector<CellIndex> res;
+vector<TreeIndex> TreeIndex::get_all_larger_possible_neighs() {
+    vector<TreeIndex> res;
     res.reserve(4);
 
     if (!is_left_border()) {
@@ -440,7 +461,7 @@ vector<CellIndex> CellIndex::get_all_larger_possible_neighs() {
     return res;
 }
 
-vector<CellIndex>& CellIndex::get_all_larger_possible_neighs_optimized(vector<CellIndex>& buf) {
+vector<TreeIndex>& TreeIndex::get_all_larger_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
         buf = get_larger_possible_face_neighbour_optimized(buf, Neigh::LEFT);
@@ -459,8 +480,8 @@ vector<CellIndex>& CellIndex::get_all_larger_possible_neighs_optimized(vector<Ce
 }
 
 // TODO optimize copying
-vector<GlobalNumber_t> CellIndex::get_all_possible_neighbours_ids() {
-    vector<CellIndex> all_neighs;
+vector<GlobalNumber_t> TreeIndex::get_all_possible_neighbours_ids() {
+    vector<TreeIndex> all_neighs;
     all_neighs.reserve(20);
 
     if (lvl < max_lvl) {
@@ -475,7 +496,7 @@ vector<GlobalNumber_t> CellIndex::get_all_possible_neighbours_ids() {
     all_neighs_ids.reserve(all_neighs.size());
 
     // cout << "get_all_possible_neighbours_ids(" << lvl << "," << i << "," << j << ")= { ";
-    for (CellIndex c: all_neighs) {
+    for (TreeIndex c: all_neighs) {
         // cout << "(" << c.lvl << "," << c.i << "," << c.j << "), ";
         all_neighs_ids.push_back(c.get_global_number());
     }
@@ -488,45 +509,52 @@ vector<GlobalNumber_t> CellIndex::get_all_possible_neighbours_ids() {
     return all_neighs_ids;
 }
 
-bool CellIndex::is_left_border() {
-    CellIndex c = get_face_neighbor(Neigh::LEFT);
+bool TreeIndex::is_left_border() {
+    TreeIndex c = get_face_neighbor(Neigh::LEFT);
     return (c.j < 0);
 }
 
-bool CellIndex::is_right_border() {
-    CellIndex c = get_face_neighbor(Neigh::RIGHT);
+bool TreeIndex::is_right_border() {
+    TreeIndex c = get_face_neighbor(Neigh::RIGHT);
     return ((c.j & (-1 << max_lvl)) != 0);
 }
 
-bool CellIndex::is_upper_border() {
-    CellIndex c = get_face_neighbor(Neigh::UP);
+bool TreeIndex::is_upper_border() {
+    TreeIndex c = get_face_neighbor(Neigh::UP);
     return ((c.i & (-1 << max_lvl)) != 0);
 }
 
-bool CellIndex::is_down_border() {
-    CellIndex c = get_face_neighbor(Neigh::DOWN);
+bool TreeIndex::is_down_border() {
+    TreeIndex c = get_face_neighbor(Neigh::DOWN);
     return (c.i < 0);
 }
 
-bool CellIndex::is_left_upper_corner() {
+bool TreeIndex::is_left_upper_corner() {
     return is_left_border() && is_upper_border();
 }
 
-bool CellIndex::is_right_upper_corner() {
+bool TreeIndex::is_right_upper_corner() {
     return is_right_border() && is_upper_border();
 }
 
-bool CellIndex::is_left_down_corner() {
+bool TreeIndex::is_left_down_corner() {
     return is_left_border() && is_down_border();
 }
 
-bool CellIndex::is_right_down_corner() {
+bool TreeIndex::is_right_down_corner() {
     return is_right_border() && is_down_border();
 }
 
-bool CellIndex::is_border() {
+bool TreeIndex::is_border() {
     return is_left_border() || is_right_border() || is_upper_border() || is_down_border();
             // is_left_upper_corner() || is_right_upper_corner() || is_left_down_corner() || is_right_down_corner();
+}
+
+
+void TreeIndex::get_corner_coords(double *x, double *y) {
+//    double lvl_dx = min_dx * pow(2, max_lvl - lvl);
+    *x = min_dx * i;
+    *y = min_dx * j;
 }
 
 
@@ -543,22 +571,22 @@ void Cell::get_spacial_coords(double *x, double *y) {
 }
 
 void Cell::get_border_cond(char *cond_type, double (**cond_func)(double, double, double)) {
-    if (is_left_border()) { 
+    if (is_left_border()) {
         Area::get_border_cond(Area::Border::LEFT, cond_type, cond_func);
         return;
     }
 
-    if (is_right_border()) { 
+    if (is_right_border()) {
         Area::get_border_cond(Area::Border::RIGHT, cond_type, cond_func);
         return;
     }
 
-    if (is_down_border()) { 
+    if (is_down_border()) {
         Area::get_border_cond(Area::Border::DOWN, cond_type, cond_func);
         return;
     }
 
-    if (is_upper_border()) { 
+    if (is_upper_border()) {
         Area::get_border_cond(Area::Border::UP, cond_type, cond_func);
         return;
     }
@@ -566,57 +594,7 @@ void Cell::get_border_cond(char *cond_type, double (**cond_func)(double, double,
     *cond_type = -1;
 }
 
-vector<Cell> Cell::split() {
-    vector<Cell> children;
-    
-    CellIndex ci00 = ((CellIndex)(*this)).get_child(Child::cLD);
-    Cell c00 = Cell(ci00, 0.0);
-    double x, y;
-    c00.get_spacial_coords(&x, &y);
-    c00.temp[0] = Area::T0(x, y);
-    children.push_back(c00);
 
-    CellIndex ci01 = ((CellIndex)(*this)).get_child(Child::cRD);
-    Cell c01 = Cell(ci01, 0.0);
-    c01.get_spacial_coords(&x, &y);
-    c01.temp[0] = Area::T0(x, y);
-    children.push_back(c01);
-
-    CellIndex ci10 = ((CellIndex)(*this)).get_child(Child::cLU);
-    Cell c10 = Cell(ci10, 0.0);
-    c10.get_spacial_coords(&x, &y);
-    c10.temp[0] = Area::T0(x, y);
-    children.push_back(c10);
-
-    CellIndex ci11 = ((CellIndex)(*this)).get_child(Child::cRU);
-    Cell c11 = Cell(ci11, 0.0);
-    c11.get_spacial_coords(&x, &y);
-    c11.temp[0] = Area::T0(x, y);
-    children.push_back(c11);
-
-    return children;
-}
-
-LinearTree::LinearTree(string filename) {
-    // todo
-}
-
-LinearTree::LinearTree(double (*Temp_func)(double, double)) {
-    
-    max_present_lvl = base_lvl;
-
-    int global_i_start = 0;
-    int global_i_stop  = 1 << (max_lvl*2);
-    int global_i_step  = 1 << (2*max_lvl - 2*base_lvl);
-
-    for (int i = global_i_start; i < global_i_stop; i += global_i_step) {
-        Cell c = Cell(base_lvl, i);
-        double x, y;
-        c.get_spacial_coords(&x, &y);
-        c.temp[0] = Temp_func(x, y);
-        cells.push_back(c);
-    }
-}
 
 int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
     // cout << "FindCell(" << target << ")\n";
@@ -643,121 +621,6 @@ int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
 	}
 	return -1;
 }
-
-int LinearTree::MarkToRefine() {
-    cout << "MarkToRefine start\n";
-    
-    if (max_present_lvl == max_lvl) {
-        return 0;
-    }
-
-    double refine_thresholds[] = {0, 0, 0, 0, 0, 10, 20, 30, 40, 50};
-
-    int n_of_marks = 0;
-
-    for (int i = 0; i < cells.size(); i++) {
-        Cell c = cells[i];
-
-        if (c.is_border()) {
-            continue;
-        }
-
-        // vector<GlobalNumber_t> neighs = c.get_all_possible_neighbours_ids();
-        // vector<double> vals = get_square_vals(neighs);
-        double grad = 0.0;
-        // double grad = get_grad(vals[0],  vals[1],  vals[2],
-        //                        vals[3], c.temp[0], vals[4],
-        //                        vals[5],  vals[6],  vals[7]);
-
-        // if (grad > refine_thresholds[c.lvl]) {
-        //     cells[i].refine_mark = 1;
-        //     n_of_marks++;
-        // }
-        double x, y;
-        c.get_spacial_coords(&x, &y);
-
-        if ((max_present_lvl == base_lvl) && (Area::Refine1(x, y))) {
-            cells[i].mark_to_refine();
-            cells[i].temp[0] = 100;
-            cout << int(cells[i].refine_mark)  << " ";
-            n_of_marks++;
-        }
-
-        if ((max_present_lvl == base_lvl + 1) && (Area::Refine2(x, y))) {
-            cells[i].refine_mark = char(1);
-            n_of_marks++;
-        }
-
-        if ((max_present_lvl == base_lvl + 2) && (Area::Refine3(x, y))) {
-            cells[i].refine_mark = 1;
-            n_of_marks++;
-        }
-
-    }
-
-    cout << "N_OF_MARKS=" << n_of_marks << endl;
-    cout << "MarkToRefine end\n";
-    return (n_of_marks > 0);
-}
-
-// по методу Базарова (из анализа изображений)
-double H1[3][3] = {
-    { 1,  2,  1},
-    { 0,  0,  0},
-    {-1, -2, -1}};
-
-double H2[3][3] = {
-    {-1, 0, 1},
-    {-2, 0, 2},
-    {-1, 0, 1}};
-
-double get_grad(double w00, double w01, double w02,
-                double w10, double w11, double w12,
-                double w20, double w21, double w22, double dx) {
-    // H1 * W
-    double S1 = (w00 + 2*w01 + w02) - (w20 + 2*w21 + w22);
-    // H2 * W
-    double S2 =  (w02 + 2*w12 + w22) - (w00 + 2*w10 + w20);
-    // модуль градиента
-    double G = 1 / (8*dx) * sqrt(S1*S1 + S2*S2);
-
-    return G;
-}
-
-void LinearTree::DoRefine() {
-    int i = 0;
-    cout << "DoRefine start\n";
-    while (i < cells.size()) {
-        Cell c = cells[i];
-        // cout << "i=" << i << " Cell(" << c.lvl << ", " << c.i << "," << c.j << ", " << c.temp[0] << ")";
-        if (c.refine_mark) {
-            cells.erase(cells.begin()+i);
-
-            vector<Cell> new_cells = c.split();
-            // if (i < 200) {
-            //     cout << "Cell(" << c.lvl << ", " << c.i << "," << c.j << ", " << c.temp[0] << ") --> ";
-            //     cout << "Cell(" << new_cells[0].lvl << ", " << new_cells[0].i << "," << new_cells[0].j << ", " << new_cells[0].temp[0] << ")  ";
-            //     cout << "Cell(" << new_cells[1].lvl << ", " << new_cells[1].i << "," << new_cells[1].j << ", " << new_cells[1].temp[0] << ")  ";
-            //     cout << "Cell(" << new_cells[2].lvl << ", " << new_cells[2].i << "," << new_cells[2].j << ", " << new_cells[2].temp[0] << ")  ";
-            //     cout << "Cell(" << new_cells[3].lvl << ", " << new_cells[3].i << "," << new_cells[3].j << ", " << new_cells[3].temp[0] << ")  ";
-            // }
-
-            cells.insert(cells.begin()+(i), new_cells.begin(), new_cells.end());
-            i += 4;
-            
-        } else {
-            i++;
-        }
-    }
-
-    max_present_lvl++;
-    cout << "DoRefine end\n";
-}
-
-void LinearTree::Balance21() {
-
-}
-
 void LinearTree::Write(string filename) {
     vector<char> buf = GenWriteStruct();
     int len = buf.size();
@@ -790,35 +653,6 @@ void LinearTree::WriteOffsets(string filename, int n_of_procs) {
     std::ofstream fout(filename, std::ios::out | std::ios::binary);
     fout.write((char *)&offsets[0], offsets.size() * sizeof(int));
     fout.close();
-}
-
-vector<char> LinearTree::GenWriteStruct() {
-    vector<char> buf;
-    std::cout << " gen structs for write start\n";
-    for (Cell c: cells) {
-        char *tmp = (char *)(&c.lvl);
-        for (int i = 0; i < sizeof(int); i++) {
-            buf.push_back(tmp[i]);
-        }
-        tmp = (char *)(&c.i);
-        for (int i = 0; i < sizeof(int); i++) {
-            buf.push_back(tmp[i]);
-        }
-        tmp = (char *)(&c.j);
-        for (int i = 0; i < sizeof(int); i++) {
-            buf.push_back(tmp[i]);
-        }
-        if (c.temp[0] > 1) {
-            // std::cout << (c.temp[0] > 5) << std::endl;
-        }
-        
-        tmp = (char *)(&c.temp[0]);
-        for (int i = 0; i < sizeof(double); i++) {
-            buf.push_back(tmp[i]);
-        }
-    }
-    std::cout << " gen structs for write finished\n";
-    return buf;
 }
 
 void LinearTree::GenFromWriteStruct(vector<char>& buf) {
@@ -864,76 +698,334 @@ double get_lvl_dx(int lvl) {
 /* * * * * * * * РАБОТА БЛОЧНЫМ ДЕРЕВОМ * * * * * * * */
 
 
+BlockOfCells::BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i):
+        cells_lvl(_cells_lvl), i(_i), idx(_blk_lvl, _i), sz(_sz) {}
+
 void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
-    // i,j, lvl --> spacial i,j
+
     for (int i = 0; i < sz; i++) {
         for (int j = 0; j < sz; j++) {
 
-            // TODO переводчик индексов нормального человека в индексы линейного дерева
-
-
-            Cell c = Cell(cells_lvl, i);
             double x, y;
-            c.get_spacial_coords(&x, &y);
-            c.temp[0] = Temp_func(x, y);
+            get_spacial_coords(i, j, &x, &y);
+
+            SimpleCell c(Temp_func(x, y));
             cells.push_back(c);
         }
     }
 }
 
+void BlockOfCells::get_spacial_coords(int i, int j, double *x, double *y) {
+    double xx, yy;
+    idx.get_corner_coords(&xx, &yy);
+
+    double lvl_dx = min_dx * pow(2, max_lvl - cells_lvl);
+    xx += i * lvl_dx + lvl_dx/2;
+    yy += j *lvl_dx + lvl_dx/2;
+
+    *x = xx;
+    *y = yy;
+}
+
+
+int BlockOfCells::MarkToRefine() {
+
+    if (cells_lvl == max_lvl) {
+        return 0;
+    }
+
+    int n_of_marks = 0;
+
+    for (int i = 0; i < sz; i++) {
+        for (int j = 0; j < sz; j++) {
+
+            double x, y;
+            get_spacial_coords(i, j, &x, &y);
+
+            if ((cells_lvl == base_lvl) && (Area::Refine1(x, y))) {
+                cells[i*sz + j].refine_mark = 1;
+//                cells[i*sz + j].temp[0] = 100;
+                cout << int(cells[i].refine_mark)  << " ";
+                n_of_marks++;
+                mark_quarter(i, j);
+            }
+
+            if ((cells_lvl == base_lvl + 1) && (Area::Refine2(x, y))) {
+                cells[i*sz + j].refine_mark = 1;
+                n_of_marks++;
+                mark_quarter(i, j);
+            }
+
+            if ((cells_lvl == base_lvl + 2) && (Area::Refine3(x, y))) {
+                cells[i*sz + j].refine_mark = 1;
+                n_of_marks++;
+                mark_quarter(i, j);
+            }
+        }
+    }
+
+    if (n_of_marks > 0) {
+        refine_mark = 1;
+        return 1;
+    }
+
+    return 0;
+}
+
+void BlockOfCells::mark_quarter(int i, int j) {
+    if ( (i < sz/2) && (j < sz/2) ) {
+        refine_marks[0] = 1;
+        return;
+    }
+    if ( (i < sz/2) && (j >= sz/2) ) {
+        refine_marks[1] = 1;
+        return;
+    }
+    if ( (i >= sz/2) && (j < sz/2) ) {
+        refine_marks[2] = 1;
+        return;
+    }
+    if ( (i >= sz/2) && (j >= sz/2) ) {
+        refine_marks[3] = 1;
+        return;
+    }
+}
+
+vector<BlockOfCells> BlockOfCells::Split(double (*Temp_func)(double, double)) {
+    vector<BlockOfCells> children;
+
+    BlockOfCells bc00 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cLD).get_global_number());
+    bc00.CreateCells(Temp_func);
+    if (refine_marks[0]) {
+        bc00.refine_mark = 1;
+    }
+    children.push_back(bc00);
+
+    BlockOfCells bc01 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cRD).get_global_number());
+    bc01.CreateCells(Temp_func);
+    if (refine_marks[1]) {
+        bc01.refine_mark = 1;
+    }
+    children.push_back(bc01);
+
+    BlockOfCells bc10 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cLU).get_global_number());
+    bc10.CreateCells(Temp_func);
+    if (refine_marks[2]) {
+        bc10.refine_mark = 1;
+    }
+    children.push_back(bc10);
+
+    BlockOfCells bc11 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cRU).get_global_number());
+    bc11.CreateCells(Temp_func);
+    if (refine_marks[3]) {
+        bc11.refine_mark = 1;
+    }
+    children.push_back(bc11);
+
+    return children;
+}
+
+void BlockOfCells::RefineCells() {
+    cells = vector<SimpleCell>();
+
+    cells_lvl++;
+    sz *= 2;
+    CreateCells(&Area::T0);
+}
 
 
 BlockedLinearTree::BlockedLinearTree(double (*Temp_func)(double, double)) {
     max_present_lvl = base_lvl;
     max_present_blk_lvl = base_blk_lvl;
-    // max_blk_lvl = base_lvl - base_blk_lvl;
 
     int global_i_start = 0;
     int global_i_stop  = 1 << (max_blk_lvl*2);
     int global_i_step  = 1 << (2*max_blk_lvl - 2*base_blk_lvl);
 
 
-
     for (int i = global_i_start; i < global_i_stop; i += global_i_step) {
-        BlockOfCells bc = BlockOfCells(base_lvl, base_blk_sz, i);
+        BlockOfCells bc = BlockOfCells(base_lvl, base_blk_lvl, base_blk_sz, i);
+        bc.CreateCells(Temp_func);
         blocks.push_back(bc);
     }
 }
 
-
-
-
-double BlockedLinearTree::BuildBlocks(int block_size) {
-    // анализируем возможность объединения последовательных ячеек
-    // TODO нужна структура сохраняющая уровни блоков кроме начал
-
-    map<int, BlockOfCells> lvl_blocks;
-
-    // base grid
-    if (base_sz%block_size != 0)  {
-        cout << "base_size=" << base_sz << " not divisible into block_sz=" << block_sz << endl;
-    }
-    int base_blocks_n = base_sz / block_size;
-    lvl_blocks[base_lvl] = vector<vector<int>>()
-
-    vector<int> seq_lvl_offsets;
-
-    cur_lvl = 0;
-    cur_block_sz = 0;
-    for (int i = 0; i < cells.size(); i++) {
-        if (cells[i].lvl != cur_lvl) {
-            // mark one level stop 
-            seq_lvl_offsets.push_back(i);
-
-            cur_block_sz = 0;
-            cur_lvl = lvl;
-        }
-        cur_block_sz++;
+int BlockedLinearTree::MarkToRefine() {
+    if (max_present_lvl == max_lvl) {
+        return 0;
     }
 
-    for (int lvl_offset: seq_lvl_offsets) {
-
+    int n_of_block_marks = 0;
+    for (int i = 0; i < blocks.size(); i++) {
+        n_of_block_marks += blocks[i].MarkToRefine();
     }
 
-
+    return (n_of_block_marks > 0);
 }
+
+void BlockedLinearTree::RefineBlocks() {
+
+    int new_max_present_blk_lvl = max_present_blk_lvl;
+    for (int i = 0; i < blocks.size();) {
+        if (blocks[i].refine_mark) {
+            if (blocks[i].idx.lvl < max_blk_lvl) {
+                vector<BlockOfCells> new_blocks = blocks[i].Split(&Area::T0);
+                blocks.erase(blocks.begin()+i);
+                blocks.insert(blocks.begin()+(i), new_blocks.begin(), new_blocks.end());
+
+                if (blocks[i].idx.lvl + 1 > new_max_present_blk_lvl) {
+                    new_max_present_blk_lvl = blocks[i].idx.lvl + 1;
+                }
+                i+= 4;
+
+            } else {
+                i++;
+            }
+        }
+    }
+
+    if (new_max_present_blk_lvl > max_present_blk_lvl) {
+        max_present_blk_lvl = new_max_present_blk_lvl;
+    }
+}
+
+void BlockedLinearTree::RefineCells() {
+    int new_max_present_lvl = max_present_lvl;
+
+    for (int i = 0; i < blocks.size(); i++) {
+        if (blocks[i].refine_mark) {
+            blocks[i].RefineCells();
+            if (blocks[i].cells_lvl > new_max_present_lvl) {
+                new_max_present_lvl = blocks[i].cells_lvl;
+            }
+        }
+    }
+
+    max_present_lvl = new_max_present_lvl;
+}
+
+void BlockedLinearTree::Decompose(int n_procs) {
+
+    int sum_weight = 0;
+    for (int i = 0; i < blocks.size(); i++) {
+        sum_weight += blocks[i].GetNOfCells();
+    }
+
+    proc_blocks = vector<int>(blocks.size(), 0);
+
+    int optimal_weight = sum_weight / n_procs;
+    int cur_weight = 0;
+    int proc_i = 0;
+    for (int i = 0; i < blocks.size(); i++) {
+        proc_blocks[i] = proc_i;
+        cur_weight += blocks[i].GetNOfCells();
+        if (cur_weight >= optimal_weight) {
+            proc_i++;
+            cur_weight = 0;
+        }
+    }
+}
+
+void BlockedLinearTree::Write(string filename) {
+    vector<char> buf = GenWriteStruct();
+    int len = buf.size();
+
+    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    fout.write(&buf[0], len);
+    fout.close();
+}
+
+vector<char> BlockedLinearTree::GenWriteStruct() {
+    vector<char> buf;
+    std::cout << " gen structs for write start\n";
+    for (int blk_i = 0; blk_i < blocks.size(); blk_i++) {
+        int lvl = blocks[blk_i].sz / 2;
+        for (int k = 0; k < blocks[blk_i].GetNOfCells(); k++) {
+            int cell_i = 0, cell_j = 0;
+            split_ints(k, lvl, &cell_i, &cell_j);
+
+            SimpleCell c = blocks[blk_i].cells[cell_i * blocks[blk_i].sz + cell_j];
+
+            int _lvl = blocks[blk_i].cells_lvl;
+            char *tmp = (char *)(&_lvl);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+
+            int tree_i, tree_j;
+            GlobalNumber_t glob_idx = get_glob_idx(blocks[blk_i].i, k, lvl);
+            split_ints(glob_idx, &tree_i, &tree_j);
+            tmp = (char *)(&tree_i);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+            tmp = (char *)(&tree_j);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+
+            int blk_n = blk_i;
+            tmp = (char *)(&blk_n);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+
+            int proc_n = proc_blocks[blk_i];
+            tmp = (char *)(&proc_n);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+
+            tmp = (char *)(&c.temp[0]);
+            for (int i = 0; i < sizeof(double); i++) {
+                buf.push_back(tmp[i]);
+            }
+        }
+    }
+    std::cout << " gen structs for write finished\n";
+    return buf;
+}
+
+GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl) {
+    GlobalNumber_t res = blk_i << 2*(max_lvl - max_blk_lvl);
+    res = res | (cell_i << 2*(max_lvl - (max_blk_lvl + cell_lvl)));
+    return res;
+}
+
+
+
+//double BlockedLinearTree::BuildBlocks(int block_size) {
+//    // анализируем возможность объединения последовательных ячеек
+//    // TODO нужна структура сохраняющая уровни блоков кроме начал
+//
+//    map<int, BlockOfCells> lvl_blocks;
+//
+//    // base grid
+//    if (base_sz%block_size != 0)  {
+//        cout << "base_size=" << base_sz << " not divisible into block_sz=" << block_sz << endl;
+//    }
+//    int base_blocks_n = base_sz / block_size;
+//    lvl_blocks[base_lvl] = vector<vector<int>>()
+//
+//    vector<int> seq_lvl_offsets;
+//
+//    cur_lvl = 0;
+//    cur_block_sz = 0;
+//    for (int i = 0; i < cells.size(); i++) {
+//        if (cells[i].lvl != cur_lvl) {
+//            // mark one level stop
+//            seq_lvl_offsets.push_back(i);
+//
+//            cur_block_sz = 0;
+//            cur_lvl = lvl;
+//        }
+//        cur_block_sz++;
+//    }
+//
+//    for (int lvl_offset: seq_lvl_offsets) {
+//
+//    }
+//
+//
+//}
+

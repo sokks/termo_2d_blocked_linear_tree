@@ -934,6 +934,8 @@ void BlockedLinearTree::Decompose(int n_procs) {
     proc_blocks = vector<int>(blocks.size(), 0);
 
     int optimal_weight = sum_weight / n_procs;
+    cout << "OPTIMAL_WEIGHT=" << optimal_weight << endl;
+    
     int cur_weight = 0;
     int proc_i = 0;
     for (int i = 0; i < blocks.size(); i++) {

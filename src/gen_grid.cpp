@@ -17,16 +17,17 @@ int main(int argc, char **argv) {
         offsets_filename   = argv[7];
     }
     GridInit(base_level, max_level, base_blk_lvl, max_blk_lvl);
-    BlockedLinearTree grid = BlockedLinearTree(&Area::T0);
+
+    BlockedLinearTree grid(&Area::T0);
+    // int a = 1;
     while (grid.MarkToRefine()) {
         grid.RefineBlocks();
         grid.RefineCells();
+        // a++;
     }
 
-    // TODO
     grid.Decompose(n_procs);
 
-    // TODO
     grid.Write(filename);
-    grid.WriteOffsets(offsets_filename, n_procs);
+    // grid.WriteOffsets(offsets_filename, n_procs);
 }

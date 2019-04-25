@@ -101,7 +101,7 @@ void split_ints(GlobalNumber_t c, int max_lvl, int *a, int *b) {
 }
 
 TreeIndex::TreeIndex(int _lvl, GlobalNumber_t globalNumber): lvl(_lvl) {
-    std::cout << "new TreeIndex(" << lvl << ", " << globalNumber << ")\n";
+    // std::cout << "new TreeIndex(" << lvl << ", " << globalNumber << ")\n";
     split_ints(globalNumber, &i, &j);
 }
 
@@ -621,14 +621,6 @@ int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
 	}
 	return -1;
 }
-void LinearTree::Write(string filename) {
-    vector<char> buf = GenWriteStruct();
-    int len = buf.size();
-
-    std::ofstream fout(filename, std::ios::out | std::ios::binary);
-    fout.write(&buf[0], len);
-    fout.close();
-}
 
 void LinearTree::WriteOffsets(string filename, int n_of_procs) {
     int one_sz = 3 * sizeof(int) + sizeof(double);
@@ -699,7 +691,10 @@ double get_lvl_dx(int lvl) {
 
 
 BlockOfCells::BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i):
-        cells_lvl(_cells_lvl), i(_i), idx(_blk_lvl, _i), sz(_sz) {}
+        cells_lvl(_cells_lvl), i(_i), idx(_blk_lvl, _i), sz(_sz) {
+            cout << "BlockOfCells(" << _cells_lvl << "," << _blk_lvl << "," << _sz << "," << _i << ")\n";
+            refine_marks[0] = 0; refine_marks[1] = 0; refine_marks[2] = 0; refine_marks[3] = 0;
+        }
 
 void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
 
@@ -708,6 +703,7 @@ void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
 
             double x, y;
             get_spacial_coords(i, j, &x, &y);
+            // cout << "get_spacial_coords(blk_i=" << this->i << ",cells_lvl=" << cells_lvl << "," << i << "," << j << ") = (" << x << "," << y << ")\n";  
 
             SimpleCell c(Temp_func(x, y));
             cells.push_back(c);
@@ -718,6 +714,7 @@ void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
 void BlockOfCells::get_spacial_coords(int i, int j, double *x, double *y) {
     double xx, yy;
     idx.get_corner_coords(&xx, &yy);
+    // cout << "get_corner_coords(" << this->i << ") = (" << xx << "," << yy << ")\n"; 
 
     double lvl_dx = min_dx * pow(2, max_lvl - cells_lvl);
     xx += i * lvl_dx + lvl_dx/2;
@@ -833,14 +830,21 @@ void BlockOfCells::RefineCells() {
     CreateCells(&Area::T0);
 }
 
+void BlockOfCells::ClearMarks() {
+    refine_mark = 0;
+    refine_marks[0] = 0; refine_marks[1] = 0; refine_marks[2] = 0; refine_marks[3] = 0;
+}
+
+
 
 BlockedLinearTree::BlockedLinearTree(double (*Temp_func)(double, double)) {
+    cout << "building base blocked tree\n";
     max_present_lvl = base_lvl;
     max_present_blk_lvl = base_blk_lvl;
 
     int global_i_start = 0;
-    int global_i_stop  = 1 << (max_blk_lvl*2);
-    int global_i_step  = 1 << (2*max_blk_lvl - 2*base_blk_lvl);
+    int global_i_stop  = 1 << (max_lvl*2);
+    int global_i_step  = 1 << (2*max_lvl - 2*base_blk_lvl);
 
 
     for (int i = global_i_start; i < global_i_stop; i += global_i_step) {
@@ -848,9 +852,11 @@ BlockedLinearTree::BlockedLinearTree(double (*Temp_func)(double, double)) {
         bc.CreateCells(Temp_func);
         blocks.push_back(bc);
     }
+    cout << "base blocked tree built, n_of_blocks=" << blocks.size() << endl;
 }
 
 int BlockedLinearTree::MarkToRefine() {
+    cout << "analysing refine\n";
     if (max_present_lvl == max_lvl) {
         return 0;
     }
@@ -860,36 +866,45 @@ int BlockedLinearTree::MarkToRefine() {
         n_of_block_marks += blocks[i].MarkToRefine();
     }
 
+    cout << "refine analysed, n_of_block_marks=" << n_of_block_marks << endl;
     return (n_of_block_marks > 0);
 }
 
 void BlockedLinearTree::RefineBlocks() {
+    cout << "refining blocks\n";
+
+    if (max_present_blk_lvl == max_blk_lvl) {
+        cout << "max blk level reached, not refining blocks\n";
+        return;
+    }
 
     int new_max_present_blk_lvl = max_present_blk_lvl;
     for (int i = 0; i < blocks.size();) {
+        cout << i << " ";
         if (blocks[i].refine_mark) {
             if (blocks[i].idx.lvl < max_blk_lvl) {
-                vector<BlockOfCells> new_blocks = blocks[i].Split(&Area::T0);
-                blocks.erase(blocks.begin()+i);
-                blocks.insert(blocks.begin()+(i), new_blocks.begin(), new_blocks.end());
-
                 if (blocks[i].idx.lvl + 1 > new_max_present_blk_lvl) {
                     new_max_present_blk_lvl = blocks[i].idx.lvl + 1;
                 }
+                vector<BlockOfCells> new_blocks = blocks[i].Split(&Area::T0);
+                blocks.erase(blocks.begin()+i);
+                blocks.insert(blocks.begin()+(i), new_blocks.begin(), new_blocks.end());
                 i+= 4;
 
             } else {
                 i++;
             }
+        } else {
+            i++;
         }
     }
 
-    if (new_max_present_blk_lvl > max_present_blk_lvl) {
-        max_present_blk_lvl = new_max_present_blk_lvl;
-    }
+    max_present_blk_lvl = new_max_present_blk_lvl;
+    cout << "blocks refined, new max_present_blk_lvl = " << max_present_blk_lvl << endl;
 }
 
 void BlockedLinearTree::RefineCells() {
+    cout << "refining cells\n";
     int new_max_present_lvl = max_present_lvl;
 
     for (int i = 0; i < blocks.size(); i++) {
@@ -898,18 +913,23 @@ void BlockedLinearTree::RefineCells() {
             if (blocks[i].cells_lvl > new_max_present_lvl) {
                 new_max_present_lvl = blocks[i].cells_lvl;
             }
+            blocks[i].ClearMarks();
         }
     }
 
     max_present_lvl = new_max_present_lvl;
+    cout << "cells refined, new max_present_lvl = " << max_present_lvl << endl;
 }
 
 void BlockedLinearTree::Decompose(int n_procs) {
+    cout << "decomposing grid\n";
 
     int sum_weight = 0;
     for (int i = 0; i < blocks.size(); i++) {
         sum_weight += blocks[i].GetNOfCells();
     }
+
+    cout << "N_OF_CELLS=" << sum_weight << endl;
 
     proc_blocks = vector<int>(blocks.size(), 0);
 
@@ -924,15 +944,19 @@ void BlockedLinearTree::Decompose(int n_procs) {
             cur_weight = 0;
         }
     }
+
+    cout << "grid decomposed\n";
 }
 
 void BlockedLinearTree::Write(string filename) {
+    cout << "writing grid\n";
     vector<char> buf = GenWriteStruct();
     int len = buf.size();
 
     std::ofstream fout(filename, std::ios::out | std::ios::binary);
     fout.write(&buf[0], len);
     fout.close();
+    cout << "grid written\n";
 }
 
 vector<char> BlockedLinearTree::GenWriteStruct() {
@@ -943,7 +967,6 @@ vector<char> BlockedLinearTree::GenWriteStruct() {
         for (int k = 0; k < blocks[blk_i].GetNOfCells(); k++) {
             int cell_i = 0, cell_j = 0;
             split_ints(k, lvl, &cell_i, &cell_j);
-
             SimpleCell c = blocks[blk_i].cells[cell_i * blocks[blk_i].sz + cell_j];
 
             int _lvl = blocks[blk_i].cells_lvl;
@@ -953,8 +976,10 @@ vector<char> BlockedLinearTree::GenWriteStruct() {
             }
 
             int tree_i, tree_j;
-            GlobalNumber_t glob_idx = get_glob_idx(blocks[blk_i].i, k, lvl);
+            GlobalNumber_t glob_idx = get_glob_idx(blocks[blk_i].i, k, _lvl);
             split_ints(glob_idx, &tree_i, &tree_j);
+            // cout << "blk_i=" << blocks[blk_i].i << " cell_k=" << k << " cell_i=" << cell_i << " cell_j=" << cell_j << " tree_i=" << tree_i << " tree_j=" << tree_j << endl;
+
             tmp = (char *)(&tree_i);
             for (int i = 0; i < sizeof(int); i++) {
                 buf.push_back(tmp[i]);
@@ -987,8 +1012,9 @@ vector<char> BlockedLinearTree::GenWriteStruct() {
 }
 
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl) {
-    GlobalNumber_t res = blk_i << 2*(max_lvl - max_blk_lvl);
-    res = res | (cell_i << 2*(max_lvl - (max_blk_lvl + cell_lvl)));
+    GlobalNumber_t res = blk_i;
+    // res = res << 2*(max_lvl - max_blk_lvl);
+    res = res | (cell_i << 2*(max_lvl - cell_lvl));
     return res;
 }
 

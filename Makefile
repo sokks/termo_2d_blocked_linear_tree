@@ -2,8 +2,10 @@
 COMPILER=mpicxx
 OPTS=-O0
 
-BASE_LVL=6
-MAX_LVL=9
+BASE_LVL=9
+MAX_LVL=12
+BASE_BLK_LVL=1
+MAX_BLK_LVL=5
 
 N_PROCS=4
 
@@ -27,7 +29,7 @@ test: bin/test
 gen_grid: bin/gen_grid
 	rm -rf data/refine/*
 	mkdir -p data/refine
-	bin/gen_grid $(BASE_LVL) $(MAX_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/offsets_$(N_PROCS).dat
+	bin/gen_grid $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/offsets_$(N_PROCS).dat
 
 
 
@@ -42,6 +44,12 @@ vis_temps: translate
 	# python3 vis_2d_nonuniform.py $(MAX_LVL) data/temp/000200.out.txt data/pics/000200.png coolwarm temp
 	mkdir -p data/temp/img
 	./plot_temps.sh $(MAX_LVL)
+
+vis_start_temp: update_txt
+	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/start_temp.png coolwarm temp
+
+vis_blocks: update_txt
+	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/grid_blocks_$(BASE_LVL)_$(BASE_BLK_LVL).png gist_ncar blks
 
 update_txt: data/refine/base_grid.dat bin/translate
 	bin/translate data/refine/base_grid.dat data/refine/base_grid.txt

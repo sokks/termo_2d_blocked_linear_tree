@@ -161,14 +161,14 @@ struct SimpleCell {
 
     SimpleCell() {}
     SimpleCell(int t) { temp[0] = t; }
-    SimpleCell(const SimpleCell& c): { temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; }
+    SimpleCell(const SimpleCell& c) { temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; }
     SimpleCell& operator=(const SimpleCell& c) {
         temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark;
         return *this;
     }
 
 
-}
+};
 
 struct BlockOfCells {
     vector<SimpleCell> cells;
@@ -183,11 +183,28 @@ struct BlockOfCells {
 
 
     BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i);
+    BlockOfCells(const BlockOfCells& b) {
+        idx = b.idx; i = b.i;
+        cells = b.cells;
+        cells_lvl = b.cells_lvl; sz = b.sz; refine_mark = b.refine_mark; 
+        refine_marks[0] = b.refine_marks[0]; refine_marks[1] = b.refine_marks[1]; 
+        refine_marks[2] = b.refine_marks[2]; refine_marks[3] = b.refine_marks[3];
+    }
+    BlockOfCells& operator=(const BlockOfCells& b) {
+        idx = b.idx; i = b.i;
+        cells = b.cells;
+        cells_lvl = b.cells_lvl; sz = b.sz; refine_mark = b.refine_mark; 
+        refine_marks[0] = b.refine_marks[0]; refine_marks[1] = b.refine_marks[1]; 
+        refine_marks[2] = b.refine_marks[2]; refine_marks[3] = b.refine_marks[3];
+        return *this;
+    }
+
     vector<BlockOfCells> Split(double (*Temp_func)(double, double));
 
     int MarkToRefine();
     void mark_quarter(int i, int j);
     void RefineCells();
+    void ClearMarks();
 
     // TODO реально создать ячейки
     void CreateCells(double (*Temp_func)(double, double));
@@ -228,6 +245,8 @@ struct BlockedLinearTree {
     void WriteOffsets(string filename, int n_of_procs);
 
 private:
+    BlockedLinearTree(const BlockedLinearTree&);
+    BlockedLinearTree& operator=(const BlockedLinearTree&);
     vector<char> GenWriteStruct();
 };
 

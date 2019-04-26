@@ -24,14 +24,16 @@ int main(int argc, char **argv) {
         std::cout << "usage: prog <base_lvl> <max_lvl> <offsets_file> <grid_file> <time_steps>\n";
         return 0;
     }
-    int    base_level = atoi(argv[1]);
-    int    max_level  = atoi(argv[2]);
-    string offsets_file  = argv[3];
-    string grid_file  = argv[4];
-    int    ts_n       = std::atoi(argv[5]);
+    int    base_level     = atoi(argv[1]);
+    int    max_level      = atoi(argv[2]);
+    int    base_blk_level = atoi(argv[3]);
+    int    max_blk_level  = atoi(argv[4]);
+    string offsets_file   = argv[5];
+    string grid_file      = argv[6];
+    int    ts_n           = std::atoi(argv[7]);
 
-    GridInit(base_level, max_level);
-    SolverInit(ts_n);   
+    GridInit(base_level, max_level, base_blk_level, max_blk_level);
+    SolverInit(ts_n);
 
     Proc p;
     p.MPIInit(argc, argv);
@@ -42,20 +44,20 @@ int main(int argc, char **argv) {
             " grid_file=" << grid_file << 
             " ts_n=" << ts_n << endl;
     
-    p.InitMesh(offsets_file, grid_file);
+    p.InitMesh(offsets_file, grid_file, &Area::T0);
 
     // usleep(10000000);
 
-    // p.BuildGhosts();
+     p.BuildGhosts();
 
     // usleep(10000000);
 
-    // for (int k = 0; k < ts_n; k++) {
-    //     if (WRITE_LAYERS && (k%write_freq ==0)) {
-    //         p.WriteT(gen_filename(baseFolderTemp, k));
-    //     }
-    //     p.MakeStep();
-    // }
+     for (int k = 0; k < ts_n; k++) {
+         if (WRITE_LAYERS && (k%write_freq ==0)) {
+             p.WriteT(gen_filename(baseFolderTemp, k));
+         }
+         p.MakeStep();
+     }
 
     p.WriteT(gen_filename(baseFolderTemp, ts_n));
     p.WriteStat("data/stat.out");

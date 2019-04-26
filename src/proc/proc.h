@@ -93,7 +93,7 @@ class Proc {
     GlobalNumber_t procG;
     GlobalNumber_t offsetG;
     FullMeta meta;
-    LinearTree mesh;
+    BlockedLinearTree mesh;
 
     vector<GlobalNumber_t> *ghosts_out_ids = nullptr;
     LinearTree *ghosts_in  = nullptr;
@@ -111,27 +111,14 @@ public:
     int MPIFinalize();
 
     /// InitMesh создает базовую структуру сетки
-    int InitMesh();
-    int InitMesh(string offsets_filename, string cells_filename);
-
-    /// MarkToRefine
-    void MarkToRefine();
-
-    // Refine измельчает помеченные ячейки
-    //
-    // Оперирует с линейным деревом, добавляя элементы-ячейки 
-    int Refine();
-
-    // LoadBalance балансирует нагрузку (линейное дерево) по процессорам
-    int LoadBalance();
+//    int InitMesh();
+    int InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double));
 
     // BuildGhosts строит структуры для обмена границами
     int BuildGhosts();
+
     // ExchangeGhosts обменивается с соседями
     int ExchangeGhosts();
-
-    // FillStart заполняет начальные заначения температуры
-    void FillStart(double (*start_func)(double, double));
 
     // MakeStep делает один временной шаг
     void MakeStep();

@@ -622,31 +622,6 @@ int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
 	return -1;
 }
 
-void LinearTree::WriteOffsets(string filename, int n_of_procs) {
-    int one_sz = 3 * sizeof(int) + sizeof(double);
-    
-    vector<int> offsets;
-    int sum = 0;
-    for (int i = 0; i < n_of_procs-1; i++) {
-        offsets.push_back(sum * one_sz);
-        int len = cells.size() / n_of_procs;
-        offsets.push_back(len * one_sz);
-        sum += len;
-    }
-    offsets.push_back(sum * one_sz);
-    offsets.push_back((cells.size() - sum) * one_sz);
-
-    cout << "OFFSETS={ ";
-    for (int i = 0; i < offsets.size(); i++) {
-        cout << offsets[i] << " ";
-    }
-    cout << "}" << endl;
-
-    std::ofstream fout(filename, std::ios::out | std::ios::binary);
-    fout.write((char *)&offsets[0], offsets.size() * sizeof(int));
-    fout.close();
-}
-
 void LinearTree::GenFromWriteStruct(vector<char>& buf) {
     max_present_lvl = base_lvl;
 
@@ -1020,6 +995,138 @@ GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cel
     return res;
 }
 
+
+void BlockedLinearTree::WriteBlocks(string filename) {
+    vector<char> buf = GenWriteBlocksStruct();
+
+    int len = buf.size();
+
+    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    fout.write(&buf[0], len);
+    fout.close();
+}
+
+
+
+vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
+    vector<char> buf;
+    std::cout << " gen structs for write start\n";
+
+    for (int blk_i = 0; blk_i < blocks.size(); blk_i++) {
+        int _lvl = blocks[blk_i].idx.lvl;
+        char *tmp = (char *)(&_lvl);
+        for (int i = 0; i < sizeof(int); i++) {
+            buf.push_back(tmp[i]);
+        }
+
+        int _i = blocks[blk_i].idx.i;
+        tmp = (char *)(&_i);
+        for (int i = 0; i < sizeof(int); i++) {
+            buf.push_back(tmp[i]);
+        }
+
+        int _j = blocks[blk_i].idx.j;
+        tmp = (char *)(&_j);
+        for (int i = 0; i < sizeof(int); i++) {
+            buf.push_back(tmp[i]);
+        }
+
+        int _c_lvl = blocks[blk_i].cells_lvl;
+        tmp = (char *)(&_c_lvl);
+        for (int i = 0; i < sizeof(int); i++) {
+            buf.push_back(tmp[i]);
+        }
+
+        int _sz = blocks[blk_i].sz;
+        tmp = (char *)(&_sz);
+        for (int i = 0; i < sizeof(int); i++) {
+            buf.push_back(tmp[i]);
+        }
+    }
+
+    std::cout << " gen structs for write finished\n";
+    return buf;
+}
+
+void BlockedLinearTree::WriteOffsets(string filename) {
+    int rec_len = 5 * sizeof(int);
+
+    vector<int> offsets_lens;
+
+    int cur_proc = 0;
+    int cur_len = 0;
+    int cur_offset = 0;
+    offsets_lens.push_back(0);
+    for (int i = 0; i < proc_blocks.size(); i++) {
+        if (proc_blocks[i] != cur_proc) {
+            offsets_lens.push_back(cur_len*rec_len);
+            offsets_lens.push_back(cur_offset*rec_len);
+            cur_offset += cur_len;
+            cur_len = 0;
+            cur_proc++;
+        }
+        cur_len++;
+    }
+    offsets_lens.push_back(cur_len*rec_len);
+    offsets_lens = vector<int>(offsets_lens.begin()+2, offsets_lens.end());
+
+    cout << "OFFSETS={ ";
+    for (int i = 0; i < offsets_lens.size(); i++) {
+        cout << offsets_lens[i] << " ";
+    }
+    cout << "}" << endl;
+
+    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    fout.write((char *)&offsets_lens[0], offsets_lens.size() * sizeof(int));
+    fout.close();
+}
+
+
+void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*start_func)(double, double)) {
+
+    max_present_lvl = base_lvl;
+    max_present_blk_lvl = base_blk_lvl;
+
+    int one_sz = 5 * sizeof(int);
+
+    char *p = &buf[0];
+    int pos = 0;
+
+    int lvl_offset = 0;
+    int i_offset = sizeof(int);
+    int j_offset = 2 * sizeof(int);
+    int c_lvl_offset = 3 * sizeof(int);
+    int sz_offset = 4 * sizeof(int);
+
+    while (pos < buf.size()) {
+        TreeIndex idx;
+        idx.lvl  = * ((int *)(&p[pos+lvl_offset]));
+        idx.i    = * ((int *)(&p[pos+i_offset]));
+        idx.j    = * ((int *)(&p[pos+j_offset]));
+
+        int cells_lvl = * ((int *)(&p[pos+c_lvl_offset]));
+        int sz = * ((int *)(&p[pos+sz_offset]));
+
+        BlockOfCells blk(idx, cells_lvl, sz);
+        blk.CreateCells(start_func);
+
+        blocks.push_back(blk);
+
+        // std::cout << "cell pushed pos=" << pos << endl;
+        if (idx.lvl > max_present_blk_lvl) {
+            max_present_blk_lvl = idx.lvl;
+        }
+
+        if (idx.lvl > max_present_blk_lvl) {
+            max_present_blk_lvl = idx.lvl;
+        }
+
+        pos += one_sz;
+    }
+
+    cout << "first cell = Cell(" << cells[0].lvl << ", " << cells[0].i << "," << cells[0].j << ", " << cells[0].temp[0] << ")";
+    cout << "last cell = Cell(" << cells[cells.size()-1].lvl << ", " << cells[cells.size()-1].i << "," << cells[cells.size()-1].j << ", " << cells[cells.size()-1].temp[0] << ")";
+}
 
 
 //double BlockedLinearTree::BuildBlocks(int block_size) {

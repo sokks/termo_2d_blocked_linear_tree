@@ -183,6 +183,12 @@ struct BlockOfCells {
 
 
     BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i);
+    BlockOfCells(TreeIndex _idx, int _cells_lvl, int _sz): idx(_idx), i(_idx.get_global_number()), cells_lvl(_cells_lvl), sz(_sz) {
+        refine_marks[0] = 0;
+        refine_marks[1] = 0;
+        refine_marks[2] = 0;
+        refine_marks[3] = 0;
+    }
     BlockOfCells(const BlockOfCells& b) {
         idx = b.idx; i = b.i;
         cells = b.cells;
@@ -206,7 +212,7 @@ struct BlockOfCells {
     void RefineCells();
     void ClearMarks();
 
-    // TODO реально создать ячейки
+    // реально создать ячейки
     void CreateCells(double (*Temp_func)(double, double));
 
     int GetNOfCells() { return cells.size(); }
@@ -218,7 +224,6 @@ struct BlockOfCells {
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl);
 
 struct BlockedLinearTree {
-    int block_size = 0;
     int max_present_lvl;
     int max_present_blk_lvl;
     // vector<int> block_offsets;
@@ -226,7 +231,7 @@ struct BlockedLinearTree {
     vector<int> proc_blocks;
 
 
-    // BlockedLinearTree(int reserved_size=0) { blocks = vector<BlockOfCells>(reserved_size); max_present_lvl = 0; max_blk_lvl = 0; }
+    BlockedLinearTree() { max_present_lvl = 0; max_present_blk_lvl = 0; }
     BlockedLinearTree(double (*Temp_func)(double, double));
 
 
@@ -238,16 +243,22 @@ struct BlockedLinearTree {
 
     void Decompose(int n_procs);
 
+    // Write for visualization
     void Write(string filename);
-//    void WriteForProcs();
 
-    // здесь изменяется стратегия разбиения, можно только по концам блоков
-    void WriteOffsets(string filename, int n_of_procs);
+    // TODO i/o
+    void WriteBlocks(string filename);
+    void WriteOffsets(string filename);
+    void GenFromWriteBlocksStruct(vector<char> buf, double (*start_func)(double, double));
+    void ReadBlocks();
+
 
 private:
     BlockedLinearTree(const BlockedLinearTree&);
     BlockedLinearTree& operator=(const BlockedLinearTree&);
+
     vector<char> GenWriteStruct();
+    vector<char> GenWriteBlocksStruct();
 };
 
 struct WriteCell {
@@ -256,4 +267,10 @@ struct WriteCell {
     double temp;
     int proc;
     int blk;
+};
+
+struct WriteBlock {
+    int lvl, i, j;
+    int cells_lvl;
+    int sz;
 };

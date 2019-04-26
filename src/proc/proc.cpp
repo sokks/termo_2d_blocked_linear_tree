@@ -103,44 +103,13 @@ int Proc::MPIFinalize() {
     return 0;
 }
 
-int Proc::InitMesh() {
-    stat.timers["init_mesh"] = MpiTimer();
-    stat.timers["init_mesh"].Start();
-
-    totalG = base_sz * base_sz;
-    procG  = totalG / mpiInfo.comm_size;
-    offsetG = procG * mpiInfo.comm_rank;
-
-    int global_i_start = 0;
-    int global_i_stop = 1 << (max_lvl*2);
-    int global_i_step = 1 << (2*max_lvl - 2*base_lvl);
-
-    int my_i_start = offsetG * global_i_step;
-    int my_i_stop = my_i_start + procG * (global_i_step);
-
-    std::cout << mpiInfo.comm_rank <<  
-        " global_i_start=" << global_i_start <<
-        " global_i_stop=" << global_i_stop <<
-        " global_i_step=" << global_i_step <<
-        " my_i_start=" << my_i_start <<
-        " my_i_stop=" << my_i_stop << std::endl;
-
-    for (int i = my_i_start; i < my_i_stop; i += global_i_step) {
-        mesh.cells.push_back(Cell(base_lvl, i));
-    }
-
-    stat.timers["init_mesh"].Stop();
-    std::cout << "Mesh inited\n";
-    return 0;
-}
-
-int Proc::InitMesh(string offsets_filename, string cells_filename) {
+int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double)) {
     stat.timers["init_mesh"] = MpiTimer();
     stat.timers["init_mesh"].Start();
 
     // [0] - offset, [1] - len
     int range[2];
-    int one_sz = 3 * sizeof(int) + sizeof(double);
+    int one_sz = 5 * sizeof(int);
 
     MPI_File fh;
     MPI_File_open( mpiInfo.comm, offsets_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
@@ -152,25 +121,25 @@ int Proc::InitMesh(string offsets_filename, string cells_filename) {
     vector<char> buffer(range[1], 1);
     std::cout << "will read cells file\n";
 
-    MPI_File_open( mpiInfo.comm, cells_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+    MPI_File_open( mpiInfo.comm, blocks_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
     MPI_File_read_at(fh, range[0], &buffer[0], range[1]-1, MPI_CHAR, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 
     std::cout << "read cells file buffer.size()=" << buffer.size() << std::endl;
     cout << mpiInfo.comm_rank << " buf[0]=" << int(buffer[0]) << endl;
 
-    mesh.GenFromWriteStruct(buffer);
+    mesh.GenFromWriteBlocksStruct(buffer, start_func);
 
     stat.timers["init_mesh"].Stop();
     std::cout << mpiInfo.comm_rank <<  " MESH INITED   " <<
-                 "n_of_cells=" << mesh.cells.size() <<
-                " cells_offset=" << range[0] / one_sz << std::endl;
+                 "n_of_blocks=" << mesh.blocks.size() <<
+                " blocks_offset=" << range[0] / one_sz << std::endl;
     
 
     MetaInfo my_meta;
-    my_meta.procStart = mesh.cells[0].get_global_number();
-    my_meta.procEnd   = mesh.cells[mesh.cells.size()-1].get_global_number();
-    my_meta.procG     = mesh.cells.size();
+    my_meta.procStart = mesh.blocks[0].idx.get_global_number();
+    my_meta.procEnd   = mesh.blocks[mesh.blocks.size()-1].idx.get_global_number();
+    my_meta.procG     = mesh.blocks.size();
 
     cout << mpiInfo.comm_rank << " my_meta={" << my_meta.procStart << "," << my_meta.procEnd << "," << my_meta.procG << "}\n";
 
@@ -186,21 +155,6 @@ int Proc::InitMesh(string offsets_filename, string cells_filename) {
         std::cout << meta.GetMetaOfProc(i).toString() << " | ";
     }
     
-    return 0;
-}
-
-
-void Proc::MarkToRefine() {
-    // not implemented
-}
-
-int Proc::Refine() {
-    // not implemented
-    return 0;
-}
-
-int Proc::LoadBalance() {
-    // not implemented
     return 0;
 }
 
@@ -500,19 +454,6 @@ int Proc::ExchangeGhosts() {
     // cout << mpiInfo.comm_rank << " ExchangeGhosts finished\n";
     return 0;
 }
-
-void Proc::FillStart(double (*start_func)(double, double)) {
-    double x, y;
-    for (int i = 0; i < mesh.cells.size(); i++) {
-        mesh.cells[i].get_spacial_coords(&x, &y);
-        
-        mesh.cells[i].temp[0] = start_func(x, y);
-        std::cout << mpiInfo.comm_rank << " cell(" << mesh.cells[i].lvl << ", " << mesh.cells[i].i << ", " << mesh.cells[i].j << "): (" << x << ", " << y << ") --> " << mesh.cells[i].temp[0] << "\n";
-    }
-
-    std::cout << mpiInfo.comm_rank << " filled start at temp[0]\n";
-}
-
 
 void Proc::MakeStep() {
 

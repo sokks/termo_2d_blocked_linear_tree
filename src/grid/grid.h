@@ -181,6 +181,11 @@ struct BlockOfCells {
     int refine_mark = 0;
     int refine_marks[4];
 
+    vector<BlockOfCells*> neighs_left;
+    vector<BlockOfCells*> neighs_right;
+    vector<BlockOfCells*> neighs_upper;
+    vector<BlockOfCells*> neighs_down;
+
 
     BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i);
     BlockOfCells(TreeIndex _idx, int _cells_lvl, int _sz): idx(_idx), i(_idx.get_global_number()), cells_lvl(_cells_lvl), sz(_sz) {
@@ -250,7 +255,7 @@ struct BlockedLinearTree {
     void WriteBlocks(string filename);
     void WriteOffsets(string filename);
     void GenFromWriteBlocksStruct(vector<char> buf, double (*start_func)(double, double));
-    void ReadBlocks();
+//    void ReadBlocks();
 
 
 private:

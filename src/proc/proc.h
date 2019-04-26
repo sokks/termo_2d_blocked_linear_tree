@@ -114,11 +114,15 @@ public:
 //    int InitMesh();
     int InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double));
 
+    // InitNeighs прописывает соседей блоков
+    int InitNeighs();
+
     // BuildGhosts строит структуры для обмена границами
     int BuildGhosts();
 
     // ExchangeGhosts обменивается с соседями
-    int ExchangeGhosts();
+    int StartExchangeGhosts();
+    int StopExchangeGhosts();
 
     // MakeStep делает один временной шаг
     void MakeStep();

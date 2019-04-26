@@ -389,7 +389,7 @@ int Proc::find_owner(GlobalNumber_t cell_id) {
     return -1;
 }
 
-int Proc::ExchangeGhosts() {
+int Proc::StartExchangeGhosts() {
     
     // cout << mpiInfo.comm_rank << " ExchangeGhosts started\n";
     stat.timers["exchange_ghosts"].Start();
@@ -455,6 +455,16 @@ int Proc::ExchangeGhosts() {
     return 0;
 }
 
+int Proc::StopExchangeGhosts() {
+    stat.timers["exchange_ghosts"].Start();
+
+    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
+    MPI_Waitall(active_neighs_num, recv_reqs, recv_statuses);
+
+    stat.timers["exchange_ghosts"].Stop();
+}
+
+
 void Proc::MakeStep() {
 
     // usleep(10000000);
@@ -464,17 +474,48 @@ void Proc::MakeStep() {
     int cur_temp_idx = temp_l_corr;
     int next_temp_idx = (temp_l_corr + 1) % 2;
 
-    ExchangeGhosts();
+    StartExchangeGhosts();
 
     // PrintMyCells();
     // PrintGhostCells();
 
     time_step_n++;
 
-    for (int i = 0; i < mesh.cells.size(); i++) {
-        
-        Cell cell = mesh.cells[i];
-        
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+
+        double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
+        int sz = mesh.blocks[blk_i].sz;
+
+        // внутренние ячейки блока
+        for (int i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
+            for (int j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
+                double flows_sum;
+                double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
+
+                double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
+                flows_sum += - Area::a * (t1 - t0) / d;
+                t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
+                flows_sum += - Area::a * (t1 - t0) / d;
+                t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
+                flows_sum += - Area::a * (t1 - t0) / d;
+                t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
+                flows_sum += - Area::a * (t1 - t0) / d;
+
+                double x, y;
+                mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
+                double q = Area::Q(x, y, tau * time_step_n);
+                double S = (2*d) * (2*d);
+
+                mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 - tau * (flows_sum - q) / S;
+            }
+        }
+    }
+
+    StopExchangeGhosts();
+
+    // границы блоков
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++){
+
         double x, y;
         cell.get_spacial_coords(&x, &y);
 

@@ -48,7 +48,9 @@ int main(int argc, char **argv) {
 
     // usleep(10000000);
 
-     p.BuildGhosts();
+    p.BuildGhosts();
+
+    cout << "PROC_MEMORY=" << p.GetProcAllocMem() << endl;
 
     // usleep(10000000);
 

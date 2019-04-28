@@ -16,7 +16,7 @@ int    time_steps = 100;
 
 void SolverInit(int ts_n) {
     base_tau = (base_dx * base_dx) / 4;
-    tau = (min_dx * min_dx) / 4;
+    tau = pow((min_dx * min_dx), 2) / 4;
     time_steps = ts_n;
 
     std::cout << "tau=" << tau << " t_end=" << tau * time_steps << std::endl;
@@ -525,12 +525,33 @@ int Proc::StartExchangeGhosts() {
 int Proc::StopExchangeGhosts() {
     stat.timers["exchange_ghosts"].Start();
 
+    int time_step_n1 = time_step_n - 1;
+    int temp_l_corr = time_step_n1 % 2; // чтобы брать значение temp[0] или temp[1]
+    int cur_temp_idx = temp_l_corr;
+    int next_temp_idx = (temp_l_corr + 1) % 2;
+
     MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
     MPI_Waitall(active_neighs_num, &recv_reqs[0], &recv_statuses[0]);
 
     // todo check statuses
 
+    // todo fill got temps
+    for (int n = 0; n < mpiInfo.comm_size; n++) {
+        if ((n == mpiInfo.comm_rank) || (fake_blocks_in_ids[n].size() == 0)) {
+            continue;
+        }
 
+        int offset_sum = 0;
+        for (int j = 0; j < fake_blocks_in_ids[n].size(); j++) {
+            BlockOfCells *blk = mesh.find_block(fake_blocks_in_ids[n][j]);
+            for (int k = 0; k < blocks_cells_in_lens[n][j]; k++) {
+                GlobalNumber_t cell_idx = cells_in_idxs_tmp[n][offset_sum+j];
+                SimpleCell *c = (*blk).find_border_cell_by_global_idx(cell_idx);
+                c->temp[next_temp_idx] = cells_in_idxs_temps[n][offset_sum + k];
+            }
+            offset_sum += blocks_cells_in_lens[n][j];
+        }
+    }
 
     stat.timers["exchange_ghosts"].Stop();
     return 0;
@@ -557,28 +578,31 @@ void Proc::MakeStep() {
 
         double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
         int sz = mesh.blocks[blk_i].sz;
+        double l = d;
+        double S = d * d;
 
         // внутренние ячейки блока
         for (int i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
             for (int j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
-                double flows_sum;
+                double flows_sum = 0;
                 double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
 
                 double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d;
+                flows_sum += - Area::a * (t1 - t0) / d * l;
                 t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d;
+                flows_sum += - Area::a * (t1 - t0) / d * l;
                 t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d;
+                flows_sum += - Area::a * (t1 - t0) / d * l;
                 t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d;
+                flows_sum += - Area::a * (t1 - t0) / d * l;
 
                 double x, y;
                 mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
                 double q = Area::Q(x, y, tau * time_step_n);
-                double S = (2*d) * (2*d);
+                
+                // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
 
-                mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 - tau * (flows_sum - q) / S;
+                mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
             }
         }
     }
@@ -586,6 +610,61 @@ void Proc::MakeStep() {
     StopExchangeGhosts();
 
     // границы блоков
+
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+        BlockOfCells& blk = mesh.blocks[blk_i];
+        
+        double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
+        int sz = mesh.blocks[blk_i].sz;
+        double l = d;
+        double S = d * d;
+
+        // bottom border
+        double border_flow = 0.0;
+        bool b = 0;
+        if (blk.neighs_down_idxs.size() == 0) {
+            b = 1;
+        }
+        for (int j = 1; j < blk.sz-1; j++) {
+            double flows_sum = 0.0;
+            double t0 = mesh.blocks[blk_i].cells[0*sz+j].temp[cur_temp_idx];
+
+            double t1 = mesh.blocks[blk_i].cells[0*sz+(j-1)].temp[cur_temp_idx];
+            flows_sum += - Area::a * (t1 - t0) / d * l;
+            t1 = mesh.blocks[blk_i].cells[0*sz+(j+1)].temp[cur_temp_idx];
+            flows_sum += - Area::a * (t1 - t0) / d * l;
+            t1 = mesh.blocks[blk_i].cells[(1)*sz+j].temp[cur_temp_idx];
+            flows_sum += - Area::a * (t1 - t0) / d * l;
+            
+            if (b != 1) {
+                GlobalNumber_t c_glob_idx = get_glob_idx(blk.idx.get_global_number(), 0*sz + j, blk.cells_lvl);
+                double outer_flow = 0.0;
+                for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+                    int o = find_owner(n_blk_i);
+                    if (o != mpiInfo.comm_rank) {
+                        BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::DOWN);
+
+                        for (GlobalNumber_t cc: c_neighs) {
+                            for (int k = 0; k < cells_in_idxs_tmp[o].size(); k++) {
+                                if (cells_in_idxs_tmp[o][k] == cc) {
+                                    int l = d;
+                                    if (fake_ghost_blocks[n_blk_i]->cells_lvl > blk.cells_lvl) {
+                                        l = l / 2;
+                                    }
+                                    outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
+    }
+
+
 //    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++){
 //
 //        double x, y;
@@ -770,3 +849,69 @@ void Proc::PrintGhostCells() {
 //        }
 //        cout << "}\n";
 }
+
+size_t Proc::GetProcAllocMem() {
+    size_t res = 0;
+    for (BlockOfCells& b: mesh.blocks) {
+        res += b.GetMemSize();
+    }
+
+    // map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;
+    // res += sizeof(BlockOfCells*) * fake_ghosh_blocks.size();
+
+    // vector<vector<GlobalNumber_t>> fake_blocks_out_ids;
+    // vector<vector<GlobalNumber_t>> fake_blocks_in_ids;
+    // vector<vector<int>> blocks_cells_out_lens;
+    // vector<vector<int>> blocks_cells_in_lens;
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        res += sizeof(GlobalNumber_t) * fake_blocks_out_ids[i].size();
+        res += sizeof(GlobalNumber_t) * fake_blocks_in_ids[i].size();
+        res += sizeof(int) * blocks_cells_out_lens[i].size();
+        res += sizeof(int) * blocks_cells_in_lens[i].size();
+    }
+
+    // vector<vector<GlobalNumber_t >> cells_out_idxs_tmp;
+    // vector<vector<GlobalNumber_t >> cells_in_idxs_tmp;
+    // vector<vector<double>> cells_out_idxs_temps;
+    // vector<vector<double>> cells_in_idxs_temps;
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        res += sizeof(GlobalNumber_t) * cells_out_idxs_tmp[i].size();
+        res += sizeof(GlobalNumber_t) * cells_in_idxs_tmp[i].size();
+        res += sizeof(double) * cells_out_idxs_temps[i].size();
+        res += sizeof(double) * cells_in_idxs_temps[i].size();
+    }
+
+    return res;
+}
+
+// MpiInfo mpiInfo;
+// Stat    stat;
+
+// int time_step_n = 0;
+
+// FullMeta meta;
+// BlockedLinearTree mesh;
+
+// map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;
+// vector<vector<GlobalNumber_t>> fake_blocks_out_ids;
+// vector<vector<GlobalNumber_t>> fake_blocks_in_ids;
+
+// vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_in_idxs;
+// vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_out_idxs;
+
+// vector<vector<int>> blocks_cells_out_lens;
+// vector<vector<int>> blocks_cells_in_lens;
+// vector<vector<GlobalNumber_t >> cells_out_idxs_tmp;
+// vector<vector<GlobalNumber_t >> cells_in_idxs_tmp;
+// vector<vector<double>> cells_out_idxs_temps;
+// vector<vector<double>> cells_in_idxs_temps;
+
+// // todo initialize this when building ghosts and destroy in destuctur
+
+// /// active_neights_num is a number of processors that we have dependencies with
+// int active_neighs_num = 0;
+
+// vector<MPI_Request> send_reqs;
+// vector<MPI_Status>  send_statuses;
+// vector<MPI_Request> recv_reqs;
+// vector<MPI_Status>  recv_statuses;

@@ -168,6 +168,20 @@ struct BlockOfCells {
     vector<GlobalNumber_t> neighs_upper_idxs;
     vector<GlobalNumber_t> neighs_down_idxs;
 
+    size_t GetMemSize() {
+        size_t res = 0;
+        res += sizeof(SimpleCell) * cells.size();
+        res += sizeof(BlockOfCells*) * neighs_left.size();
+        res += sizeof(BlockOfCells*) * neighs_right.size();
+        res += sizeof(BlockOfCells*) * neighs_upper.size();
+        res += sizeof(BlockOfCells*) * neighs_down.size();
+        res += sizeof(GlobalNumber_t) * neighs_left_idxs.size();
+        res += sizeof(GlobalNumber_t) * neighs_right_idxs.size();
+        res += sizeof(GlobalNumber_t) * neighs_upper_idxs.size();
+        res += sizeof(GlobalNumber_t) * neighs_down_idxs.size();
+
+        return res;
+    }
 
     BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i);
     BlockOfCells(TreeIndex _idx, int _cells_lvl, int _sz): idx(_idx), i(_idx.get_global_number()), cells_lvl(_cells_lvl), sz(_sz) {

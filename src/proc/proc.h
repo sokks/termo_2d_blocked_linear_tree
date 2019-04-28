@@ -140,6 +140,8 @@ public:
     void WriteT(string filename);
     void WriteStat(string filename);
 
+    size_t GetProcAllocMem();
+
 private:
 
     int find_owner(GlobalNumber_t cell_id);

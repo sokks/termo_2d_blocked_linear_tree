@@ -1075,7 +1075,7 @@ void BlockedLinearTree::Write(string filename) {
 
 vector<char> BlockedLinearTree::GenWriteStruct(char light) {
     vector<char> buf;
-    std::cout << " gen structs for write start\n";
+    // std::cout << " gen structs for write start\n";
     for (int blk_i = 0; blk_i < blocks.size(); blk_i++) {
         int lvl = blocks[blk_i].sz / 2;
         for (int k = 0; k < blocks[blk_i].GetNOfCells(); k++) {
@@ -1124,7 +1124,7 @@ vector<char> BlockedLinearTree::GenWriteStruct(char light) {
             }
         }
     }
-    std::cout << " gen structs for write finished\n";
+    // std::cout << " gen structs for write finished\n";
     return buf;
 }
 

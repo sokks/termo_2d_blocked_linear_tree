@@ -1,0 +1,2 @@
+n_cells,n_procs,init_mesh,build_ghosts,compute_temp,exchange_ghosts
+851968,2,0.098798,0.00170517,89.0569,0.00517774

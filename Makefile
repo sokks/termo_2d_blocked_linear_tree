@@ -31,6 +31,10 @@ gen_grid: bin/gen_grid
 	mkdir -p data/refine
 	bin/gen_grid $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/base_grid_blocks.dat data/refine/offsets_$(N_PROCS).dat
 
+polus_job_gen_grid: bin/gen_grid
+	rm -rf data/refine/*
+	mkdir -p data/refine
+	mpisubmit.pl -p 1 bin/gen_grid -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/base_grid_blocks.dat data/refine/offsets_$(N_PROCS).dat
 
 
 vis_base_grid: update_txt

@@ -137,7 +137,7 @@ struct SimpleCell {
     char refine_mark = 0;
 
     SimpleCell() {}
-    SimpleCell(int t) { temp[0] = t; }
+    SimpleCell(int t) { temp[0] = t; temp[1] = t; }
     SimpleCell(const SimpleCell& c) { temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; }
     SimpleCell& operator=(const SimpleCell& c) {
         temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark;
@@ -205,6 +205,7 @@ struct BlockOfCells {
     int GetNOfCells() { return cells.size(); }
 
     void get_spacial_coords(int i, int j, double *x, double *y);
+    SimpleCell *find_border_cell_by_global_idx(GlobalNumber_t global_idx);
 
 };
 
@@ -247,13 +248,13 @@ struct BlockedLinearTree {
 //    void ReadBlocks();
 
 
-
+    vector<char> GenWriteStruct(char light);
 
 private:
     BlockedLinearTree(const BlockedLinearTree&);
     BlockedLinearTree& operator=(const BlockedLinearTree&);
 
-    vector<char> GenWriteStruct();
+
     vector<char> GenWriteBlocksStruct();
 };
 

@@ -20,7 +20,7 @@ string gen_filename(string baseFolder, int n) {
 
 
 int main(int argc, char **argv) {
-    if (argc < 6) {
+    if (argc < 8) {
         std::cout << "usage: prog <base_lvl> <max_lvl> <offsets_file> <grid_file> <time_steps>\n";
         return 0;
     }

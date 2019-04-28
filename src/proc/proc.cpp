@@ -72,19 +72,6 @@ Proc::~Proc() {
 
     cout << mpiInfo.comm_rank << " DESTROYING PROC\n";
 
-    if (ghosts_out_ids != nullptr) {
-        delete[] ghosts_out_ids;
-    }
-    if (ghosts_in != nullptr) {
-        delete[] ghosts_in;
-    }
-    if (ghosts_in_temps != nullptr) {
-        delete[] ghosts_in_temps;
-    }
-    if (ghosts_out_temps != nullptr) {
-        delete[] ghosts_out_temps;
-    }
-
     stat.timers["total"].Stop();
     std::cout << mpiInfo.comm_rank << " ";
     std::cout << stat.toString() << std::endl;
@@ -160,9 +147,11 @@ int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*sta
 
 
 int Proc::BuildGhosts() {
-    stat.timers["build_ghosts"].Start();
-
     MPI_Barrier(mpiInfo.comm);
+
+    cout << mpiInfo.comm_rank << " building ghosts\n";
+
+    stat.timers["build_ghosts"].Start();
 
     // (1) create fake_ghost_blocks struct
     build_fake_ghost_blocks();
@@ -171,9 +160,12 @@ int Proc::BuildGhosts() {
     build_ghost_cells();
 
     // (3) build border cells neighs pointers
-
+    // TODO
 
     stat.timers["build_ghosts"].Stop();
+    MPI_Barrier(mpiInfo.comm);
+
+    cout << mpiInfo.comm_rank << " built ghosts\n";
     return 0;
 }
 
@@ -181,7 +173,7 @@ int Proc::BuildGhosts() {
 void Proc::build_fake_ghost_blocks() {
 
     // строим списки индексов соседей блоков по процессам
-    vector<GlobalNumber_t>* fake_blocks_out_ids = new vector<GlobalNumber_t>[mpiInfo.comm_size];
+    fake_blocks_out_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
             int o = find_owner(neight_num);
@@ -212,6 +204,12 @@ void Proc::build_fake_ghost_blocks() {
     }
     cout << mpiInfo.comm_rank << " active_neighs_num=" << active_neighs_num << endl;
 
+    send_reqs = vector<MPI_Request>(active_neighs_num);
+    send_statuses = vector<MPI_Status>(active_neighs_num);
+    recv_reqs = vector<MPI_Request>(active_neighs_num);
+    recv_statuses = vector<MPI_Status>(active_neighs_num);
+
+
     // обмениваемся длинами чтобы знать сколько блоков от кого принимать
     vector<int> in_lens(mpiInfo.comm_size, 0);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
@@ -221,14 +219,12 @@ void Proc::build_fake_ghost_blocks() {
 
     // (1) обмен айдишниками блоков
     // формируем массивы для приема
-    vector<vector<GlobalNumber_t>> fake_blocks_in_ids_tmp(mpiInfo.comm_size);
+    fake_blocks_in_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
-        fake_blocks_in_ids_tmp[i] = vector<GlobalNumber_t>(in_lens[i]);
+        fake_blocks_in_ids[i] = vector<GlobalNumber_t>(in_lens[i]);
     }
 
     // отправляем и принимаем
-    MPI_Request send_reqs[active_neighs_num];
-    MPI_Status send_statuses[active_neighs_num];
     int req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if (out_lens[n] > 0) {
@@ -239,10 +235,10 @@ void Proc::build_fake_ghost_blocks() {
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
-            MPI_Recv(&fake_blocks_in_ids_tmp[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
+            MPI_Recv(&fake_blocks_in_ids[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
-    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
+    MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
 
 
     // (2) обмен информацией о блоках
@@ -277,31 +273,116 @@ void Proc::build_fake_ghost_blocks() {
             MPI_Recv(&data_fake_blocks_in[n][0], in_lens[n] * 3, MPI_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
-    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
+    MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
 
 
     // (3) формируем собственно мапу
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         for (int j = 0; j < in_lens[i]; j++) {
-            fake_ghost_blocks[fake_blocks_in_ids_tmp[i][j]] = new BlockOfCells(
+            fake_ghost_blocks[fake_blocks_in_ids[i][j]] = new BlockOfCells(
                     data_fake_blocks_in[i][j+1],
                     data_fake_blocks_in[i][j],
                     data_fake_blocks_in[i][j+2],
-                    fake_blocks_in_ids_tmp[i][j]
-                    );
+                    fake_blocks_in_ids[i][j]);
         }
     }
 }
 
 void Proc::build_ghost_cells() {
 
+    // (1) построение мапки нужных ячеек по блокам
+    build_needed_cells_for_blocks_map();
+
+
+    // (2) обмен этими нужными ячейками
+
+    // обмен длинами
+    blocks_cells_out_lens = vector<vector<int>>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
+            blocks_cells_out_lens[i].push_back(cells_out_idxs[i][fake_blocks_out_ids[i][j]].size());
+        }
+    }
+
+    blocks_cells_in_lens = vector<vector<int>>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        blocks_cells_in_lens[i] = vector<int>(fake_blocks_in_ids[i].size());
+    }
+
+    MPI_Request send_reqs[active_neighs_num];
+    MPI_Status send_statuses[active_neighs_num];
+    int req_num = 0;
+    for (int n = 0; n < mpiInfo.comm_size; n++) {
+        if (fake_blocks_out_ids[n].size() > 0) {
+            MPI_Isend(&blocks_cells_out_lens[n][0], fake_blocks_out_ids[n].size(), MPI_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
+            req_num++;
+        }
+    }
+    for (int n = 0; n < mpiInfo.comm_size; n++) {
+        if ( (n != mpiInfo.comm_rank) && (fake_blocks_in_ids[n].size() > 0) ) {
+            MPI_Status status;
+            MPI_Recv(&blocks_cells_in_lens[n][0], fake_blocks_in_ids[n].size(), MPI_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
+        }
+    }
+    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
+
+    // формирование исходящих и входящих структур для списков индексов по блокам
+    cells_in_idxs_tmp = vector<vector<GlobalNumber_t >>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        int sum = 0;
+        for (int j = 0; j < blocks_cells_in_lens[i].size(); j++) {
+            sum += blocks_cells_in_lens[i][j];
+        }
+        cells_in_idxs_tmp[i] = vector<GlobalNumber_t>(sum);
+    }
+
+    cells_out_idxs_tmp = vector<vector<GlobalNumber_t >>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
+            for (int k = 0; k < blocks_cells_out_lens[i][j]; j++) {
+                cells_out_idxs_tmp[i].push_back(cells_out_idxs[i][j][k]);
+            }
+        }
+    }
+
+    // обмен индексами ячеек
+    req_num = 0;
+    for (int n = 0; n < mpiInfo.comm_size; n++) {
+        if (fake_blocks_out_ids[n].size() > 0) {
+            MPI_Isend(&cells_out_idxs_tmp[n][0], cells_out_idxs_tmp[n].size(), MPI_LONG_LONG_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
+            req_num++;
+        }
+    }
+    for (int n = 0; n < mpiInfo.comm_size; n++) {
+        if ( (n != mpiInfo.comm_rank) && (fake_blocks_in_ids[n].size() > 0) ) {
+            MPI_Status status;
+            MPI_Recv(&cells_in_idxs_tmp[n][0], cells_in_idxs_tmp[n].size(), MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
+        }
+    }
+    MPI_Waitall(active_neighs_num, send_reqs, &send_statuses[0]);
+
+
+    // (3) построение структур для значений температур
+    cells_in_idxs_temps = vector<vector<double>>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        cells_in_idxs_temps[i] = vector<double>(cells_in_idxs_tmp[i].size());
+    }
+
+    cells_out_idxs_temps = vector<vector<double>>(mpiInfo.comm_size);
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        cells_out_idxs_temps[i] = vector<double>(cells_out_idxs_tmp[i].size());
+    }
+
+}
+
+void Proc::build_needed_cells_for_blocks_map() {
+    cells_out_idxs = vector<map<GlobalNumber_t, vector<GlobalNumber_t >>>(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         int sz = mesh.blocks[blk_i].sz;
         int c_lvl = mesh.blocks[blk_i].cells_lvl;
 
         // bottom border
         for (int j = 0; j < sz; j++) {
-            SimpleCell c = mesh.blocks[blk_i].cells[0*sz + j];
             GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), 0*sz + j, c_lvl);
 
             for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
@@ -309,14 +390,72 @@ void Proc::build_ghost_cells() {
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
                     vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
-
+                    for (GlobalNumber_t cc: c_neighs) {
+                        if (cells_out_idxs[o].find(n_blk_i) == cells_out_idxs[o].end()) {
+                            cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
+                        }
+                        cells_out_idxs[o][n_blk_i].push_back(cc);
+                    }
                 }
             }
         }
+        // upper border
+        for (int j = 0; j < sz; j++) {
+            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), (sz-1)*sz + j, c_lvl);
 
+            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+                int o = find_owner(n_blk_i);
+                if (o != mpiInfo.comm_rank) {
+                    BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::UP);
+                    for (GlobalNumber_t cc: c_neighs) {
+                        if (cells_out_idxs[o].find(n_blk_i) == cells_out_idxs[o].end()) {
+                            cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
+                        }
+                        cells_out_idxs[o][n_blk_i].push_back(cc);
+                    }
+                }
+            }
+        }
+        // left border
+        for (int i = 0; i < sz; i++) {
+            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + 0, c_lvl);
 
+            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+                int o = find_owner(n_blk_i);
+                if (o != mpiInfo.comm_rank) {
+                    BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
+                    for (GlobalNumber_t cc: c_neighs) {
+                        if (cells_out_idxs[o].find(n_blk_i) == cells_out_idxs[o].end()) {
+                            cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
+                        }
+                        cells_out_idxs[o][n_blk_i].push_back(cc);
+                    }
+                }
+            }
+        }
+        // right border
+        for (int i = 0; i < sz; i++) {
+            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + (sz-1), c_lvl);
+
+            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+                int o = find_owner(n_blk_i);
+                if (o != mpiInfo.comm_rank) {
+                    BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
+                    for (GlobalNumber_t cc: c_neighs) {
+                        if (cells_out_idxs[o].find(n_blk_i) == cells_out_idxs[o].end()) {
+                            cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
+                        }
+                        cells_out_idxs[o][n_blk_i].push_back(cc);
+                    }
+                }
+            }
+        }
     }
 }
+
 
 
 int Proc::find_owner(GlobalNumber_t cell_id) {
@@ -345,56 +484,38 @@ int Proc::StartExchangeGhosts() {
 
     req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
-        if ( (n != mpiInfo.comm_rank) && (ghosts_out_ids[n].size() > 0) ) {
-            // fill out temps for n
-            for (int i = 0; i < ghosts_out_ids[n].size(); i++) {
-                Cell c;
-                int idx = mesh.FindCell(ghosts_out_ids[n][i], &c);
-                if (idx == -1) {
-                    cout << "[ERROR] exchange ghosts cell not found but have to\n";
-                }
-                ghosts_out_temps[n][i] = mesh.cells[idx].temp[cur_temp_idx];
-            }
-            
-            MPI_Isend(&ghosts_out_temps[n][0], ghosts_out_ids[n].size(), MPI_DOUBLE, n, 0, mpiInfo.comm, &send_reqs[req_num]);
-            req_num++;
+        if ((n == mpiInfo.comm_rank) || (fake_blocks_out_ids[n].size() == 0)) {
+            continue;
         }
+
+        int offset_sum = 0;
+        for (int j = 0; j < fake_blocks_out_ids[n].size(); j++) {
+            BlockOfCells *blk = mesh.find_block(fake_blocks_out_ids[n][j]);
+            for (int k = 0; k < blocks_cells_out_lens[n][j]; k++) {
+                GlobalNumber_t cell_idx = cells_out_idxs_tmp[n][offset_sum+j];
+                SimpleCell *c = (*blk).find_border_cell_by_global_idx(cell_idx);
+                cells_out_idxs_temps[n][offset_sum+k] = c->temp[cur_temp_idx];
+            }
+            offset_sum += blocks_cells_out_lens[n][j];
+        }
+
+        MPI_Isend(&cells_out_idxs_temps[n][0], cells_out_idxs_temps[n].size(), MPI_DOUBLE, n, 0, mpiInfo.comm, &send_reqs[req_num]);
+        MPI_Irecv(&cells_in_idxs_temps[n][0], cells_in_idxs_temps[n].size(), MPI_DOUBLE, n, 0, mpiInfo.comm, &recv_reqs[req_num]);
+
+        req_num++;
     }
 
-
-    // non-blocking recv from all neighs
-
-    req_num = 0;
-    for (int n = 0; n < mpiInfo.comm_size; n++) {
-        if ( (n != mpiInfo.comm_rank) && (ghosts_in[n].cells.size() > 0) ) {
-            MPI_Status status;
-            MPI_IRecv(&ghosts_in_temps[n][0], ghosts_in[n].cells.size(), MPI_DOUBLE, n, MPI_ANY_TAG, mpiInfo.comm, &recv_reqs[req_num]);
-
-            req_num++;
-
-            // fill temp in in_ghosts[n]
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                ghosts_in[n].cells[i].temp[cur_temp_idx] = ghosts_in_temps[n][i];
-            }
-        }
-    }
-
-    
-
-
-
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " GHOSTS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << "[ ";
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ": " <<  ghosts_in[n].cells[i].temp[cur_temp_idx] << ") ";
-            }
-            cout << "] ";
-        }
-        cout << "}\n";
-    }
-
+    // if (FULL_DEBUG) {
+    //     cout << mpiInfo.comm_rank << " GHOSTS={ ";
+    //     for (int n = 0; n < mpiInfo.comm_size; n++) {
+    //         cout << "[ ";
+    //         for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
+    //             cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ": " <<  ghosts_in[n].cells[i].temp[cur_temp_idx] << ") ";
+    //         }
+    //         cout << "] ";
+    //     }
+    //     cout << "}\n";
+    // }
 
     stat.timers["exchange_ghosts"].Stop();
     // cout << mpiInfo.comm_rank << " ExchangeGhosts finished\n";
@@ -404,12 +525,15 @@ int Proc::StartExchangeGhosts() {
 int Proc::StopExchangeGhosts() {
     stat.timers["exchange_ghosts"].Start();
 
-    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
-    MPI_Waitall(active_neighs_num, recv_reqs, recv_statuses);
+    MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
+    MPI_Waitall(active_neighs_num, &recv_reqs[0], &recv_statuses[0]);
 
     // todo check statuses
 
+
+
     stat.timers["exchange_ghosts"].Stop();
+    return 0;
 }
 
 
@@ -462,140 +586,141 @@ void Proc::MakeStep() {
     StopExchangeGhosts();
 
     // границы блоков
-    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++){
+//    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++){
+//
+//        double x, y;
+//        cell.get_spacial_coords(&x, &y);
+//
+//        // ищем всех возможных соседей
+//        stat.timers["get_possible_neighs"].Start();
+//        vector<GlobalNumber_t> possible_neigh_ids = cell.get_all_possible_neighbours_ids();
+//        stat.timers["get_possible_neighs"].Stop();
+//
+//
+//        // вычисляем потоки междуу ячейкой и реально существующими соседями
+//        vector<double> termo_flows;
+//        for (GlobalNumber_t id: possible_neigh_ids) {
+//            int owner = find_owner(id);
+//            if (owner == -1) {
+//                continue;
+//            }
+//            Cell neigh_cell;
+//
+//            if (owner == mpiInfo.comm_rank) { // ячейка у меня
+//                stat.timers["find_cell"].Start();
+//                int idx = mesh.FindCell(id, &neigh_cell);
+//                stat.timers["find_cell"].Stop();
+//                if (idx == -1) {
+//                    continue;
+//                }
+//            } else { // ячейка-призрак
+//                stat.timers["find_cell"].Start();
+//                int idx = ghosts_in[owner].FindCell(id, &neigh_cell);
+//                stat.timers["find_cell"].Stop();
+//                if (idx == -1) {
+//                    continue;
+//                }
+//            }
+//
+//            double neigh_x, neigh_y;
+//            neigh_cell.get_spacial_coords(&neigh_x, &neigh_y);
+//            double d = dist(x, y, neigh_x, neigh_y);
+//            // cout << "dist( (" << x << "," << y << ")  (" << neigh_x << "," << neigh_y << ") )=" << d << endl;
+//            double flow = - Area::a * (neigh_cell.temp[cur_temp_idx] - cell.temp[cur_temp_idx]) / d;
+//            double s = get_lvl_dx(cell.lvl);
+//            s = (cell.lvl <= neigh_cell.lvl) ? s : (s/2);
+//
+//            // проекции на оси
+//            double full_flow = s * flow * fabs(x - neigh_x) / d + s * flow * fabs(y - neigh_y) / d;
+//
+//            termo_flows.push_back(full_flow);
+//        }
+//
+//        double flows_sum = 0.0;
+//        for (double f: termo_flows) {
+//            flows_sum += f;
+//        }
+//
+//        // вычисляем новое значение в ячейке
+//
+//        char border_cond_type;
+//        double (*cond_func)(double, double, double);
+//        stat.timers["get_border_cond"].Start();
+//        cell.get_border_cond(&border_cond_type, &cond_func);
+//        stat.timers["get_border_cond"].Stop();
+//
+//        double new_T = 0;
+//
+//        if (border_cond_type == char(-1)) {  // внутренняя ячейка
+//
+//            if (FULL_DEBUG) {
+//                cout << mpiInfo.comm_rank << "cur_t=" << cell.temp[cur_temp_idx] << " flows_sum=" << flows_sum << " S=" << cell.get_S() << " Q(x,y,t)=" << Area::Q(x, y, tau * time_step_n) << endl;
+//            }
+//            new_T = cell.temp[cur_temp_idx] - tau * (flows_sum
+//                    - Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
+//
+//        } else if (border_cond_type == 1) {  // граничные условия первого рода
+//
+//            // это по сути тоже поток, только короче (половина размера ячейки) по напралению к границе
+//            double border_x = x, border_y = y; // +- lvl_dx/2
+//            double lvl_dx = get_lvl_dx(cell.lvl);
+//            if (cell.is_right_border()) {
+//                border_x += lvl_dx/2;
+//            }
+//            if (cell.is_left_border()) {
+//                border_x -= lvl_dx/2;
+//            }
+//            if (cell.is_down_border()) {
+//                border_y -= lvl_dx/2;
+//            }
+//            if (cell.is_upper_border()) {
+//                border_y += lvl_dx/2;
+//            }
+//            double border_flow = - Area::a * (cell.temp[cur_temp_idx]
+//                    - cond_func(border_x, border_y, time_step_n * tau)) / (lvl_dx/2) * lvl_dx;
+//            new_T = cell.temp[cur_temp_idx] - tau * ((flows_sum + border_flow)
+//                    + Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
+//
+//        } else if (border_cond_type == 2) { // граничное условие второго рода
+//
+//            // TODO это просто добавить поток, заданный условием
+//            double border_x = x, border_y = y; // +- lvl_dx/2
+//            double lvl_dx = get_lvl_dx(cell.lvl);
+//            if (cell.is_right_border()) {
+//                border_x += lvl_dx/2;
+//            }
+//            if (cell.is_left_border()) {
+//                border_x -= lvl_dx/2;
+//            }
+//            if (cell.is_down_border()) {
+//                border_y -= lvl_dx/2;
+//            }
+//            if (cell.is_upper_border()) {
+//                border_y += lvl_dx/2;
+//            }
+//            double border_flow = cond_func(border_x, border_y, time_step_n * tau);
+//            new_T = cell.temp[cur_temp_idx] - tau * ((flows_sum + border_flow)
+//                    + Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
+//
+//            // std::cout << "border cond type = 2 not implemented\n";
+//            // not imptemented
+//        }
+//
+//        mesh.cells[i].temp[next_temp_idx] = new_T;
+//    }
 
-        double x, y;
-        cell.get_spacial_coords(&x, &y);
-
-        // ищем всех возможных соседей
-        stat.timers["get_possible_neighs"].Start();
-        vector<GlobalNumber_t> possible_neigh_ids = cell.get_all_possible_neighbours_ids();
-        stat.timers["get_possible_neighs"].Stop();
-
-
-        // вычисляем потоки междуу ячейкой и реально существующими соседями
-        vector<double> termo_flows;
-        for (GlobalNumber_t id: possible_neigh_ids) {
-            int owner = find_owner(id);
-            if (owner == -1) {
-                continue;
-            }
-            Cell neigh_cell;
-
-            if (owner == mpiInfo.comm_rank) { // ячейка у меня
-                stat.timers["find_cell"].Start();
-                int idx = mesh.FindCell(id, &neigh_cell);
-                stat.timers["find_cell"].Stop();
-                if (idx == -1) {
-                    continue;
-                }
-            } else { // ячейка-призрак
-                stat.timers["find_cell"].Start();
-                int idx = ghosts_in[owner].FindCell(id, &neigh_cell);
-                stat.timers["find_cell"].Stop();
-                if (idx == -1) {
-                    continue;
-                }
-            }
-
-            double neigh_x, neigh_y;
-            neigh_cell.get_spacial_coords(&neigh_x, &neigh_y);
-            double d = dist(x, y, neigh_x, neigh_y);
-            // cout << "dist( (" << x << "," << y << ")  (" << neigh_x << "," << neigh_y << ") )=" << d << endl;
-            double flow = - Area::a * (neigh_cell.temp[cur_temp_idx] - cell.temp[cur_temp_idx]) / d;
-            double s = get_lvl_dx(cell.lvl);
-            s = (cell.lvl <= neigh_cell.lvl) ? s : (s/2);
-
-            // проекции на оси
-            double full_flow = s * flow * fabs(x - neigh_x) / d + s * flow * fabs(y - neigh_y) / d;
-
-            termo_flows.push_back(full_flow);
-        }
-
-        double flows_sum = 0.0;
-        for (double f: termo_flows) {
-            flows_sum += f;
-        }
-
-        // вычисляем новое значение в ячейке
-       
-        char border_cond_type;
-        double (*cond_func)(double, double, double);
-        stat.timers["get_border_cond"].Start();
-        cell.get_border_cond(&border_cond_type, &cond_func);
-        stat.timers["get_border_cond"].Stop();
-
-        double new_T = 0;
-        
-        if (border_cond_type == char(-1)) {  // внутренняя ячейка
-
-            if (FULL_DEBUG) {
-                cout << mpiInfo.comm_rank << "cur_t=" << cell.temp[cur_temp_idx] << " flows_sum=" << flows_sum << " S=" << cell.get_S() << " Q(x,y,t)=" << Area::Q(x, y, tau * time_step_n) << endl;
-            }
-            new_T = cell.temp[cur_temp_idx] - tau * (flows_sum  
-                    - Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
-
-        } else if (border_cond_type == 1) {  // граничные условия первого рода
-
-            // это по сути тоже поток, только короче (половина размера ячейки) по напралению к границе
-            double border_x = x, border_y = y; // +- lvl_dx/2
-            double lvl_dx = get_lvl_dx(cell.lvl);
-            if (cell.is_right_border()) {
-                border_x += lvl_dx/2;
-            }
-            if (cell.is_left_border()) {
-                border_x -= lvl_dx/2;
-            }
-            if (cell.is_down_border()) {
-                border_y -= lvl_dx/2;
-            }
-            if (cell.is_upper_border()) {
-                border_y += lvl_dx/2;
-            }
-            double border_flow = - Area::a * (cell.temp[cur_temp_idx] 
-                    - cond_func(border_x, border_y, time_step_n * tau)) / (lvl_dx/2) * lvl_dx;
-            new_T = cell.temp[cur_temp_idx] - tau * ((flows_sum + border_flow) 
-                    + Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
-
-        } else if (border_cond_type == 2) { // граничное условие второго рода
-
-            // TODO это просто добавить поток, заданный условием
-            double border_x = x, border_y = y; // +- lvl_dx/2
-            double lvl_dx = get_lvl_dx(cell.lvl);
-            if (cell.is_right_border()) {
-                border_x += lvl_dx/2;
-            }
-            if (cell.is_left_border()) {
-                border_x -= lvl_dx/2;
-            }
-            if (cell.is_down_border()) {
-                border_y -= lvl_dx/2;
-            }
-            if (cell.is_upper_border()) {
-                border_y += lvl_dx/2;
-            }
-            double border_flow = cond_func(border_x, border_y, time_step_n * tau);
-            new_T = cell.temp[cur_temp_idx] - tau * ((flows_sum + border_flow) 
-                    + Area::Q(x, y, tau * time_step_n)) /  cell.get_S();
-
-            // std::cout << "border cond type = 2 not implemented\n";
-            // not imptemented
-        }
-
-        mesh.cells[i].temp[next_temp_idx] = new_T;
-    }
     stat.timers["step"].Stop();
 }
 
 void Proc::WriteT(string filename) {
     stat.timers["io"].Start();
 
-    vector<char> buf = mesh.GenWriteStruct();
+    vector<char> buf = mesh.GenWriteStruct(1);
     int len = buf.size();
     int *lens = new int[mpiInfo.comm_size];
-    stat.timers["communication"].Start();
+//    stat.timers["communication"].Start();
     MPI_Allgather(&len, 1, MPI_INT, (void *)lens, 1, MPI_INT, mpiInfo.comm);
-    stat.timers["communication"].Stop();
+//    stat.timers["communication"].Stop();
     int offset = 0;
     for (int i = 0; i < mpiInfo.comm_rank; i++) {
         offset += lens[i];
@@ -616,46 +741,32 @@ void Proc::WriteStat(string filename) {
     std::cout << "MpiInfo: " << mpiInfo.toString() << std::endl;
 }
 
-int Proc::ISendGhosts() {
-    // MPI_ISend()
 
-    return 0;
-}
-int Proc::IRecvGhosts() {
-    // MPI_IRecv()
-    // запомнить шутку, по которой ждать потом
-    return 0;
-}
-int Proc::WaitallGhosts() {
-    return 0;
-}
-
-// void MPI_Allgather_wrapper()
-
-void Proc::PrintMyCells() {
+void Proc::PrintMyBlocks() {
 
     int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
     int cur_temp_idx = temp_l_corr;
 
     cout << mpiInfo.comm_rank << " CELLS={ ";
-    for (int i = 0; i < mesh.cells.size(); i++) {
-        cout << "(" << mesh.cells[i].lvl << "," << mesh.cells[i].i << "," << mesh.cells[i].j << ": " <<  mesh.cells[i].temp[cur_temp_idx] << ") ";
+    for (int i = 0; i < mesh.blocks.size(); i++) {
+        cout << "(" << mesh.blocks[i].idx.lvl << "," << mesh.blocks[i].idx.i << "," << mesh.blocks[i].idx.j <<
+              mesh.blocks[i].cells_lvl << ", " << mesh.blocks[i].sz << ") ";
     }
     cout << "}\n";
 }
 
 void Proc::PrintGhostCells() {
 
-    int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
-    int cur_temp_idx = temp_l_corr;
-
-    cout << mpiInfo.comm_rank << " GHOSTS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << n << ":[ ";
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ": " <<  ghosts_in[n].cells[i].temp[cur_temp_idx] << ") ";
-            }
-            cout << "] ";
-        }
-        cout << "}\n";
+//    int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
+//    int cur_temp_idx = temp_l_corr;
+//
+//    cout << mpiInfo.comm_rank << " GHOSTS={ ";
+//        for (int n = 0; n < mpiInfo.comm_size; n++) {
+//            cout << n << ":[ ";
+//            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
+//                cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ": " <<  ghosts_in[n].cells[i].temp[cur_temp_idx] << ") ";
+//            }
+//            cout << "] ";
+//        }
+//        cout << "}\n";
 }

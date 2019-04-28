@@ -88,32 +88,32 @@ class Proc {
 
     int time_step_n = 0;
 
-    
-//    GlobalNumber_t totalG;
-//    GlobalNumber_t procG;
-//    GlobalNumber_t offsetG;
     FullMeta meta;
     BlockedLinearTree mesh;
 
-
-//    vector<GlobalNumber_t> *ghosts_out_ids = nullptr;
-//    LinearTree *ghosts_in  = nullptr;
-//    vector<double> *ghosts_in_temps  = nullptr;
-//    vector<double> *ghosts_out_temps = nullptr;
-
     map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;
+    vector<vector<GlobalNumber_t>> fake_blocks_out_ids;
+    vector<vector<GlobalNumber_t>> fake_blocks_in_ids;
+
     vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_in_idxs;
     vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_out_idxs;
+
+    vector<vector<int>> blocks_cells_out_lens;
+    vector<vector<int>> blocks_cells_in_lens;
+    vector<vector<GlobalNumber_t >> cells_out_idxs_tmp;
+    vector<vector<GlobalNumber_t >> cells_in_idxs_tmp;
+    vector<vector<double>> cells_out_idxs_temps;
+    vector<vector<double>> cells_in_idxs_temps;
 
     // todo initialize this when building ghosts and destroy in destuctur
 
     /// active_neights_num is a number of processors that we have dependencies with
     int active_neighs_num = 0;
 
-    MPI_Request *send_reqs;
-    MPI_Status  *send_statuses;
-    MPI_Request *recv_reqs;
-    MPI_Status  *recv_statuses;
+    vector<MPI_Request> send_reqs;
+    vector<MPI_Status>  send_statuses;
+    vector<MPI_Request> recv_reqs;
+    vector<MPI_Status>  recv_statuses;
 
 public:
     Proc();
@@ -148,12 +148,9 @@ private:
     void build_fake_ghost_blocks();
     void build_ghost_cells();
 
+    void build_needed_cells_for_blocks_map();
 
-    int ISendGhosts();
-    int IRecvGhosts();
-    int WaitallGhosts();
-
-    void PrintMyCells();
+    void PrintMyBlocks();
     void PrintGhostCells();
 
 // запрещаем копирование

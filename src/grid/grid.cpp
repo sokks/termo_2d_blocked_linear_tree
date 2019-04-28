@@ -595,34 +595,6 @@ void Cell::get_border_cond(char *cond_type, double (**cond_func)(double, double,
 }
 
 
-
-int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
-    // cout << "FindCell(" << target << ")\n";
-
-    // binary search
-    int left = 0;
-	int right = cells.size();
-	while (left < right) {
-		int midi = (right + left) / 2;
-		Cell mid = cells[midi];
-        GlobalNumber_t val = mid.get_global_number();
-		if (val == target) {
-			// return midi;
-            if (cell != nullptr) {
-                *cell = mid;
-            }
-            return midi;
-		}
-        if (val < target) {
-			left = midi + 1;
-		} else {
-			right = midi;
-		}
-	}
-	return -1;
-}
-
-
 double get_lvl_dx(int lvl) {
     return  min_dx * pow(2, max_lvl - lvl);
 }
@@ -651,6 +623,8 @@ void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
             cells.push_back(c);
         }
     }
+
+    // cout << "CC new_size=" << cells.size() << endl;
 }
 
 void BlockOfCells::get_spacial_coords(int i, int j, double *x, double *y) {
@@ -732,6 +706,8 @@ void BlockOfCells::mark_quarter(int i, int j) {
 
 vector<BlockOfCells> BlockOfCells::Split(double (*Temp_func)(double, double)) {
     vector<BlockOfCells> children;
+
+//? здесь бага ( sz/2 = 0 ) если он был равен 1 (т.е. уровень блока был равен уровню ячейки)
 
     BlockOfCells bc00 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cLD).get_global_number());
     bc00.CreateCells(Temp_func);
@@ -868,32 +844,49 @@ void BlockedLinearTree::BuildNeighs() {
 
     for (int i = 0; i < blocks.size(); i++) {
 
+        // cout << "BN " << i << " h1\n";
         if (!blocks[i].idx.is_left_border()) {
+            // cout << "BN " << i << " h11\n";
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::LEFT);
+            // cout << "BN " << i << " h12\n";
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            blocks[i].neighs_left = find_block_children(possible_neigh->idx, Neigh::RIGHT);
+            // cout << "BN " << i << " h13 idx=" << possible_neigh_idx.get_global_number() << std::endl;
+            if (possible_neigh != nullptr) {
+                blocks[i].neighs_left = find_block_children(possible_neigh->idx, Neigh::RIGHT);
+            }
+            // cout << "BN " << i << " h14\n";
         }
 
+        // cout << "BN " << i << " h2\n";
         if (!blocks[i].idx.is_right_border()) {
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::RIGHT);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            blocks[i].neighs_right = find_block_children(possible_neigh->idx, Neigh::LEFT);
+            if (possible_neigh != nullptr) {
+                blocks[i].neighs_right = find_block_children(possible_neigh->idx, Neigh::LEFT);
+            }
         }
 
+        // cout << "BN " << i << " h3\n";
         if (!blocks[i].idx.is_upper_border()) {
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::UP);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            blocks[i].neighs_upper = find_block_children(possible_neigh->idx, Neigh::DOWN);
+            if (possible_neigh != nullptr) {
+                blocks[i].neighs_upper = find_block_children(possible_neigh->idx, Neigh::DOWN);
+            }
         }
 
+        // cout << "BN " << i << " h3\n";
         if (!blocks[i].idx.is_down_border()) {
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::DOWN);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            blocks[i].neighs_down = find_block_children(possible_neigh->idx, Neigh::UP);
+            if (possible_neigh != nullptr) {
+                blocks[i].neighs_down = find_block_children(possible_neigh->idx, Neigh::UP);
+            }
         }
 
     }
 
+    // cout << "BN " << " h4\n";
     for (int i = 0; i < blocks.size(); i++) {
         // left
         for (BlockOfCells *b_ptr: blocks[i].neighs_left) {
@@ -938,7 +931,7 @@ BlockOfCells* BlockedLinearTree::find_block(TreeIndex target) {
     int right = blocks.size();
     while (left < right) {
         int midi = (right + left) / 2;
-        BlockOfCells mid = blocks[midi];
+        BlockOfCells& mid = blocks[midi];
         GlobalNumber_t val = mid.idx.get_global_number();
         if (val == t) {
             return &mid;
@@ -961,7 +954,7 @@ BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
     int right = blocks.size();
     while (left < right) {
         int midi = (right + left) / 2;
-        BlockOfCells mid = blocks[midi];
+        BlockOfCells& mid = blocks[midi];
         GlobalNumber_t val = mid.idx.get_global_number();
         if (val == t) {
             return &mid;
@@ -977,7 +970,9 @@ BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
 
 vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, Neigh n) {
 
-    list<BlockOfCells*> res_list;
+    // cout << "find_block_children( (" << target.lvl << "," << target.i << "," << target.j << "), " << n <<  ")" << endl;
+
+    vector<BlockOfCells*> res_list;
 
     BlockOfCells *t_blk = find_block(target);
     res_list.push_back(t_blk);
@@ -987,6 +982,12 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
 
         int i = 0;
         while (i < res_list.size()) {
+            // cout << res_list[i].idx << endl;
+            if (res_list[i]->idx.lvl == max_present_blk_lvl) {
+                i++;
+                continue;
+            }
+
             // find two needed children
             Child ch1, ch2;
             if (n == Neigh::LEFT) {
@@ -999,8 +1000,8 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
                 ch1 = Child::cLD; ch2 = Child::cRD;
             }
 
-            GlobalNumber_t t1 = target.get_child(ch1).get_global_number();
-            GlobalNumber_t t2 = target.get_child(ch2).get_global_number();
+            GlobalNumber_t t1 = res_list[i]->idx.get_child(ch1).get_global_number();
+            GlobalNumber_t t2 = res_list[i]->idx.get_child(ch2).get_global_number();
 
             BlockOfCells *b1, *b2;
             b1 = find_block(t1);
@@ -1008,11 +1009,11 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
 
             // update children list
             if (b1 && b2) {
-                list<BlockOfCells*>::iterator itr = res_list.begin();
-                std::advance(itr, i);
-                res_list.erase(itr);
-                res_list.insert(itr, b2);
-                res_list.insert(itr, b1);
+                // list<BlockOfCells*>::iterator itr = res_list.begin();
+                // std::advance(itr, i);
+                res_list.erase(res_list.begin()+i);
+                res_list.insert(res_list.begin()+i, b2);
+                res_list.insert(res_list.begin()+i, b1);
 
                 changed = 1;
                 i += 2;
@@ -1034,6 +1035,7 @@ void BlockedLinearTree::Decompose(int n_procs) {
         sum_weight += blocks[i].GetNOfCells();
     }
 
+    cout << "N_OF_BLOCKS=" << blocks.size() << endl;
     cout << "N_OF_CELLS=" << sum_weight << endl;
 
     proc_blocks = vector<int>(blocks.size(), 0);
@@ -1052,12 +1054,17 @@ void BlockedLinearTree::Decompose(int n_procs) {
         }
     }
 
+    for (int i = 0; i < proc_blocks.size(); i++) {
+        cout << proc_blocks[i] << " ";
+    }
+    cout << endl;
+
     cout << "grid decomposed\n";
 }
 
 void BlockedLinearTree::Write(string filename) {
     cout << "writing grid\n";
-    vector<char> buf = GenWriteStruct();
+    vector<char> buf = GenWriteStruct(0);
     int len = buf.size();
 
     std::ofstream fout(filename, std::ios::out | std::ios::binary);
@@ -1066,7 +1073,7 @@ void BlockedLinearTree::Write(string filename) {
     cout << "grid written\n";
 }
 
-vector<char> BlockedLinearTree::GenWriteStruct() {
+vector<char> BlockedLinearTree::GenWriteStruct(char light) {
     vector<char> buf;
     std::cout << " gen structs for write start\n";
     for (int blk_i = 0; blk_i < blocks.size(); blk_i++) {
@@ -1102,7 +1109,10 @@ vector<char> BlockedLinearTree::GenWriteStruct() {
                 buf.push_back(tmp[i]);
             }
 
-            int proc_n = proc_blocks[blk_i];
+            int proc_n = 0;
+            if (!light) {
+                proc_n = proc_blocks[blk_i];
+            }
             tmp = (char *)(&proc_n);
             for (int i = 0; i < sizeof(int); i++) {
                 buf.push_back(tmp[i]);
@@ -1116,6 +1126,23 @@ vector<char> BlockedLinearTree::GenWriteStruct() {
     }
     std::cout << " gen structs for write finished\n";
     return buf;
+}
+
+SimpleCell *BlockOfCells::find_border_cell_by_global_idx(GlobalNumber_t target) {
+    SimpleCell *res = nullptr;
+
+    GlobalNumber_t mask(-1);
+    mask = mask << 2*(max_lvl - max_blk_lvl);
+    mask = ~mask;
+
+    GlobalNumber_t idx = target & mask;
+    idx = idx >> (2*(max_lvl - cells_lvl));
+    if ((idx > sz*sz) || (idx < 0)) {
+        cout << "[ERROR] idx out of bounds\n";
+        return nullptr;
+    }
+
+    return &cells[idx];
 }
 
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl) {
@@ -1167,6 +1194,7 @@ void BlockedLinearTree::WriteBlocks(string filename) {
     vector<char> buf = GenWriteBlocksStruct();
 
     int len = buf.size();
+    cout << "WriteBlocks len=" << len << endl;
 
     std::ofstream fout(filename, std::ios::out | std::ios::binary);
     fout.write(&buf[0], len);
@@ -1217,7 +1245,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
                 _neigh = blocks[blk_i].neighs_left[i]->idx.get_global_number();
             }
             tmp = (char *)(&_neigh);
-            for (int i = 0; i < sizeof(int); i++) {
+            for (int i = 0; i < sizeof(GlobalNumber_t); i++) {
                 buf.push_back(tmp[i]);
             }
         }
@@ -1229,7 +1257,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
                 _neigh = blocks[blk_i].neighs_right[i]->idx.get_global_number();
             }
             tmp = (char *)(&_neigh);
-            for (int i = 0; i < sizeof(int); i++) {
+            for (int i = 0; i < sizeof(GlobalNumber_t); i++) {
                 buf.push_back(tmp[i]);
             }
         }
@@ -1241,7 +1269,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
                 _neigh = blocks[blk_i].neighs_upper[i]->idx.get_global_number();
             }
             tmp = (char *)(&_neigh);
-            for (int i = 0; i < sizeof(int); i++) {
+            for (int i = 0; i < sizeof(GlobalNumber_t); i++) {
                 buf.push_back(tmp[i]);
             }
         }
@@ -1253,7 +1281,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
                 _neigh = blocks[blk_i].neighs_down[i]->idx.get_global_number();
             }
             tmp = (char *)(&_neigh);
-            for (int i = 0; i < sizeof(int); i++) {
+            for (int i = 0; i < sizeof(GlobalNumber_t); i++) {
                 buf.push_back(tmp[i]);
             }
         }
@@ -1273,17 +1301,18 @@ void BlockedLinearTree::WriteOffsets(string filename) {
     int cur_offset = 0;
     offsets_lens.push_back(0);
     for (int i = 0; i < proc_blocks.size(); i++) {
+        // cout << "proc block " << i  << " proc=" << proc_blocks[i] << endl;
         if (proc_blocks[i] != cur_proc) {
             offsets_lens.push_back(cur_len*rec_len);
-            offsets_lens.push_back(cur_offset*rec_len);
             cur_offset += cur_len;
+            offsets_lens.push_back(cur_offset*rec_len);
             cur_len = 0;
             cur_proc++;
         }
         cur_len++;
     }
     offsets_lens.push_back(cur_len*rec_len);
-    offsets_lens = vector<int>(offsets_lens.begin()+2, offsets_lens.end());
+    // offsets_lens = vector<int>(offsets_lens.begin()+2, offsets_lens.end());
 
     cout << "OFFSETS={ ";
     for (int i = 0; i < offsets_lens.size(); i++) {
@@ -1374,8 +1403,8 @@ void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*star
         pos += one_sz;
     }
 
-    cout << "first cell = Cell(" << cells[0].lvl << ", " << cells[0].i << "," << cells[0].j << ", " << cells[0].temp[0] << ")";
-    cout << "last cell = Cell(" << cells[cells.size()-1].lvl << ", " << cells[cells.size()-1].i << "," << cells[cells.size()-1].j << ", " << cells[cells.size()-1].temp[0] << ")";
+    // cout << "first cell = Cell(" << cells[0].lvl << ", " << cells[0].i << "," << cells[0].j << ", " << cells[0].temp[0] << ")";
+    // cout << "last cell = Cell(" << cells[cells.size()-1].lvl << ", " << cells[cells.size()-1].i << "," << cells[cells.size()-1].j << ", " << cells[cells.size()-1].temp[0] << ")";
 }
 
 

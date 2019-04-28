@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
         grid.RefineBlocks();
         grid.RefineCells();
     }
+    grid.BuildNeighs();
 
     grid.Decompose(n_procs);
 

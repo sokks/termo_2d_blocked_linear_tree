@@ -164,218 +164,160 @@ int Proc::BuildGhosts() {
 
     MPI_Barrier(mpiInfo.comm);
 
-    ghosts_in_temps  = new vector<double>[mpiInfo.comm_size];
-    ghosts_out_temps = new vector<double>[mpiInfo.comm_size];
+    // (1) create fake_ghost_blocks struct
+    build_fake_ghost_blocks();
 
-    ghosts_out_ids = new vector<GlobalNumber_t>[mpiInfo.comm_size];
-    ghosts_in      = new LinearTree[mpiInfo.comm_size];
+    // (2) create each block req indices
+    build_ghost_cells();
 
-    // cout << mpiInfo.comm_rank << " BuildGhosts here1\n";
+    // (3) build border cells neighs pointers
 
-    for (Cell c: mesh.cells) {
-        vector<Cell> neighs;
-        
-        vector<GlobalNumber_t> neigh_ids = c.get_all_possible_neighbours_ids();
 
-        if (FULL_DEBUG) {
-            cout << mpiInfo.comm_rank << " neigh_ids(" << c.get_global_number() << ")= {sz=" << neigh_ids.size() << "}";
-            for (int i = 0; i < neigh_ids.size(); i++) {
-                cout << neigh_ids[i] << " ";
-            }
-            cout << endl;
-        }
+    stat.timers["build_ghosts"].Stop();
+    return 0;
+}
 
-        // find their owners
-        for (GlobalNumber_t neigh: neigh_ids) {
-            int owner = find_owner(neigh);
-            if (owner == -1) {
-                continue;
-            }
-            if (owner != mpiInfo.comm_rank) {
-                ghosts_out_ids[owner].push_back(c.get_global_number());
+
+void Proc::build_fake_ghost_blocks() {
+
+    // строим списки индексов соседей блоков по процессам
+    vector<GlobalNumber_t>* fake_blocks_out_ids = new vector<GlobalNumber_t>[mpiInfo.comm_size];
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
+            int o = find_owner(neight_num);
+            if (o != mpiInfo.comm_rank) {
+                fake_blocks_out_ids[o].push_back(neight_num);
             }
         }
     }
-
-    // cout << mpiInfo.comm_rank << " BuildGhosts here2\n";
 
     // сортируем и удаляем повторения
     for (int i = 0; i < mpiInfo.comm_size; i++) {
-        std::sort(ghosts_out_ids[i].begin(), ghosts_out_ids[i].end());
-        auto last = std::unique(ghosts_out_ids[i].begin(), ghosts_out_ids[i].end());
-        ghosts_out_ids[i].erase(last, ghosts_out_ids[i].end());
+        std::sort(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
+        auto last = std::unique(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
+        fake_blocks_out_ids[i].erase(last, fake_blocks_out_ids[i].end());
     }
 
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " GHOSTS_OUT_IDS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << "[ ";
-            for (int i = 0; i < ghosts_out_ids[n].size(); i++) {
-                cout << ghosts_out_ids[n][i] << " ";
-            }
-            cout << "] ";
-        }
-        cout << "}\n";
-    }
-
-    // cout << mpiInfo.comm_rank << " BuildGhosts here3\n";
-
-    // считаем количество соседей, которым что-то нужно отправлять и обмениваемся размерами
+    // формируем списки длин по процессам для дальнейшего обмена
     vector<int> out_lens(mpiInfo.comm_size, 0);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
-        out_lens[i] = ghosts_out_ids[i].size();
+        out_lens[i] = fake_blocks_out_ids[i].size();
     }
+
+    // здесь определяется количество активных соседей
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         if (out_lens[i] > 0) {
             active_neighs_num++;
         }
     }
     cout << mpiInfo.comm_rank << " active_neighs_num=" << active_neighs_num << endl;
+
+    // обмениваемся длинами чтобы знать сколько блоков от кого принимать
     vector<int> in_lens(mpiInfo.comm_size, 0);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         MPI_Gather(&out_lens[i], 1, MPI_INT, &in_lens[0], 1, MPI_INT, i, mpiInfo.comm);
     }
 
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " IN_LENS=[ ";
-        for (int i = 0; i < mpiInfo.comm_size; i++) {
-            cout << in_lens[i] << " ";
-        }
-        cout << "]\n";
-    }
-    
-    // cout << mpiInfo.comm_rank << " BuildGhosts here4\n";
 
-    // обмениваемся idшниками ячеек от соседей и формируем LinearTree ячеек
-    vector<vector<GlobalNumber_t>> ghosts_in_ids_tmp(mpiInfo.comm_size);
+    // (1) обмен айдишниками блоков
+    // формируем массивы для приема
+    vector<vector<GlobalNumber_t>> fake_blocks_in_ids_tmp(mpiInfo.comm_size);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
-        ghosts_in_ids_tmp[i] = vector<GlobalNumber_t>(in_lens[i]);
+        fake_blocks_in_ids_tmp[i] = vector<GlobalNumber_t>(in_lens[i]);
     }
 
-    // cout << mpiInfo.comm_rank << " BuildGhosts here44\n";
-
+    // отправляем и принимаем
     MPI_Request send_reqs[active_neighs_num];
     MPI_Status send_statuses[active_neighs_num];
     int req_num = 0;
-
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if (out_lens[n] > 0) {
-            MPI_Isend(&ghosts_out_ids[n][0], out_lens[n], MPI_LONG_LONG_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
+            MPI_Isend(&fake_blocks_out_ids[n][0], out_lens[n], MPI_LONG_LONG_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
             req_num++;
         }
     }
-
-    // cout << mpiInfo.comm_rank << " BuildGhosts here444\n";
-
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
-            MPI_Recv(&ghosts_in_ids_tmp[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
-
-            // fill temp in in_ghosts[n]
-            for (int i = 0; i < in_lens[n]; i++) {
-                ghosts_in[n].cells.push_back(Cell(0, ghosts_in_ids_tmp[n][i])); 
-                ghosts_in[n].cells[i].temp[0] = 0.0;
-            }
+            MPI_Recv(&fake_blocks_in_ids_tmp[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
-
-    // cout << mpiInfo.comm_rank << " BuildGhosts here4444\n";
-
     MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
 
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " GHOSTS_IN_WITHOUT_LEVELS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << "[ ";
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ") ";
-            }
-            cout << "] ";
-        }
-        cout << "}\n";
-    }
 
-    // cout << mpiInfo.comm_rank << " BuildGhosts here5\n";
-
-    // заполняем уровни ячеек
-    vector<vector<int>> ghosts_out_lvls_tmp(mpiInfo.comm_size);
-    for (int n = 0; n < mpiInfo.comm_size; n++ ) {
-        for (int i = 0; i < out_lens[n]; i++) {
-            Cell c;
-            int c_idx = mesh.FindCell(ghosts_out_ids[n][i], &c);
-            if (c_idx == -1) {
-                cout << "ERROR no cell found\n";
-                // continue;
-            }
-            int c_lvl = mesh.cells[c_idx].lvl;
-            ghosts_out_lvls_tmp[n].push_back(c_lvl);
+    // (2) обмен информацией о блоках
+    // формируем массивы для отправки
+    vector<vector<int>> data_fake_blocks_out;
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        data_fake_blocks_out.push_back(vector<int>());
+        for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
+            BlockOfCells *blk = mesh.find_block(fake_blocks_out_ids[i][j]);
+            data_fake_blocks_out[i].push_back(blk->idx.lvl);
+            data_fake_blocks_out[i].push_back(blk->cells_lvl);
+            data_fake_blocks_out[i].push_back(blk->sz);
         }
     }
-
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " GHOSTS_OUT_LEVELS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << "[ ";
-            for (int i = 0; i < ghosts_out_lvls_tmp[n].size(); i++) {
-                cout << ghosts_out_lvls_tmp[n][i] << " ";
-            }
-            cout << "] ";
-        }
-        cout << "}\n";
+    // формируем массивы для приема
+    vector<vector<int>> data_fake_blocks_in;
+    for (int i = 0; i < mpiInfo.comm_size; i++) {
+        data_fake_blocks_in.push_back(vector<int>(in_lens[i]*3));
     }
 
+    // отправляем и принимаем
     req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if (out_lens[n] > 0) {
-            MPI_Isend(&ghosts_out_lvls_tmp[n][0], out_lens[n], MPI_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
+            MPI_Isend(&data_fake_blocks_out[n][0], out_lens[n] * 3, MPI_INT, n, 0, mpiInfo.comm, &send_reqs[req_num]);
             req_num++;
         }
     }
-
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
-            vector<int>buf(in_lens[n]);
-            MPI_Recv(&buf[0], in_lens[n], MPI_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
-
-            // fill lvlvs in in_ghosts[n]
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                ghosts_in[n].cells[i].lvl = buf[i];
-            }
+            MPI_Recv(&data_fake_blocks_in[n][0], in_lens[n] * 3, MPI_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
-
     MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
 
-    // cout << mpiInfo.comm_rank << " BuildGhosts here6\n";
 
-    // создаем буферы для входящих и исходящих температур
+    // (3) формируем собственно мапу
     for (int i = 0; i < mpiInfo.comm_size; i++) {
-        ghosts_in_temps[i]  = vector<double>(in_lens[i], 0);
-        ghosts_out_temps[i] = vector<double>(out_lens[i], 0);
-    }
-
-    // cout << mpiInfo.comm_rank << " BuildGhosts here7\n";
-
-    std::cout << mpiInfo.comm_rank << " ghosts buffers built\n";
-
-    if (FULL_DEBUG) {
-        cout << mpiInfo.comm_rank << " GHOSTS={ ";
-        for (int n = 0; n < mpiInfo.comm_size; n++) {
-            cout << "[ ";
-            for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
-                cout << "(" << ghosts_in[n].cells[i].lvl << "," << ghosts_in[n].cells[i].i << "," << ghosts_in[n].cells[i].j << ") ";
-            }
-            cout << "] ";
+        for (int j = 0; j < in_lens[i]; j++) {
+            fake_ghost_blocks[fake_blocks_in_ids_tmp[i][j]] = new BlockOfCells(
+                    data_fake_blocks_in[i][j+1],
+                    data_fake_blocks_in[i][j],
+                    data_fake_blocks_in[i][j+2],
+                    fake_blocks_in_ids_tmp[i][j]
+                    );
         }
-        cout << "}\n";
     }
-
-
-    stat.timers["build_ghosts"].Stop();
-    return 0;
 }
+
+void Proc::build_ghost_cells() {
+
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+        int sz = mesh.blocks[blk_i].sz;
+        int c_lvl = mesh.blocks[blk_i].cells_lvl;
+
+        // bottom border
+        for (int j = 0; j < sz; j++) {
+            SimpleCell c = mesh.blocks[blk_i].cells[0*sz + j];
+            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), 0*sz + j, c_lvl);
+
+            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+                int o = find_owner(n_blk_i);
+                if (o != mpiInfo.comm_rank) {
+                    BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
+
+                }
+            }
+        }
+
+
+    }
+}
+
 
 int Proc::find_owner(GlobalNumber_t cell_id) {
     for (int i = 0; i < mpiInfo.comm_size; i++) {
@@ -389,6 +331,7 @@ int Proc::find_owner(GlobalNumber_t cell_id) {
     return -1;
 }
 
+
 int Proc::StartExchangeGhosts() {
     
     // cout << mpiInfo.comm_rank << " ExchangeGhosts started\n";
@@ -396,12 +339,11 @@ int Proc::StartExchangeGhosts() {
 
     int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
     int cur_temp_idx = temp_l_corr;
+    int req_num;
 
     // non-blocking send to all neighs
-    MPI_Request send_reqs[active_neighs_num];
-    MPI_Status send_statuses[active_neighs_num];
-    int req_num = 0;
 
+    req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (ghosts_out_ids[n].size() > 0) ) {
             // fill out temps for n
@@ -419,12 +361,16 @@ int Proc::StartExchangeGhosts() {
         }
     }
 
-    // blocking recv from all neighs
 
+    // non-blocking recv from all neighs
+
+    req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (ghosts_in[n].cells.size() > 0) ) {
             MPI_Status status;
-            MPI_Recv(&ghosts_in_temps[n][0], ghosts_in[n].cells.size(), MPI_DOUBLE, n, MPI_ANY_TAG, mpiInfo.comm, &status);
+            MPI_IRecv(&ghosts_in_temps[n][0], ghosts_in[n].cells.size(), MPI_DOUBLE, n, MPI_ANY_TAG, mpiInfo.comm, &recv_reqs[req_num]);
+
+            req_num++;
 
             // fill temp in in_ghosts[n]
             for (int i = 0; i < ghosts_in[n].cells.size(); i++) {
@@ -434,7 +380,7 @@ int Proc::StartExchangeGhosts() {
     }
 
     
-    MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
+
 
 
     if (FULL_DEBUG) {
@@ -460,6 +406,8 @@ int Proc::StopExchangeGhosts() {
 
     MPI_Waitall(active_neighs_num, send_reqs, send_statuses);
     MPI_Waitall(active_neighs_num, recv_reqs, recv_statuses);
+
+    // todo check statuses
 
     stat.timers["exchange_ghosts"].Stop();
 }

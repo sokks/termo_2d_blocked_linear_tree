@@ -7,12 +7,14 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <list>
 
 #include "../area/area.h"
 
 using std::vector;
 using std::map;
 using std::string;
+using std::list;
 
 extern int    base_sz;
 extern double base_dx;
@@ -119,31 +121,6 @@ struct Cell: public TreeIndex {
 };
 
 
-// ! очень большая оптимизация по времени и памяти, если искать в диапазоне
-
-struct LinearTree {
-    
-    int max_present_lvl;
-    vector<Cell> cells;
-
-    LinearTree(int reserved_size=0) { cells = vector<Cell>(reserved_size); max_present_lvl = 0; }
-    LinearTree(string filename);
-    LinearTree(double (*Temp_func)(double, double));
-
-    int FindCell(GlobalNumber_t target, Cell *cell);
-
-    // MarkToRefine returns 1 if where are cells to refine and they can be refined, 0 otherwise
-    int  MarkToRefine();
-    void DoRefine();
-    void Balance21();
-
-    void Write(string filename);
-    void WriteOffsets(string filename, int n_of_procs);
-    vector<char> GenWriteStruct();
-    void GenFromWriteStruct(vector<char>&);
-
-};
-
 double get_grad(double w00, double w01, double w02,
                 double w10, double w11, double w12,
                 double w20, double w21, double w22, double dx);
@@ -186,6 +163,11 @@ struct BlockOfCells {
     vector<BlockOfCells*> neighs_upper;
     vector<BlockOfCells*> neighs_down;
 
+    vector<GlobalNumber_t> neighs_left_idxs;
+    vector<GlobalNumber_t> neighs_right_idxs;
+    vector<GlobalNumber_t> neighs_upper_idxs;
+    vector<GlobalNumber_t> neighs_down_idxs;
+
 
     BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t _i);
     BlockOfCells(TreeIndex _idx, int _cells_lvl, int _sz): idx(_idx), i(_idx.get_global_number()), cells_lvl(_cells_lvl), sz(_sz) {
@@ -227,6 +209,8 @@ struct BlockOfCells {
 };
 
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl);
+int check_cell_owner(GlobalNumber_t blk_i, GlobalNumber_t cell_i);
+vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx, int cell_lvl, BlockOfCells* blk, Neigh neigh_dir);
 
 struct BlockedLinearTree {
     int max_present_lvl;
@@ -246,6 +230,11 @@ struct BlockedLinearTree {
     void RefineBlocks();
     void RefineCells();
 
+    void BuildNeighs();
+    BlockOfCells* find_block(TreeIndex target);
+    BlockOfCells* find_block(GlobalNumber_t target);
+    vector<BlockOfCells*> find_block_children(TreeIndex target, Neigh n);
+
     void Decompose(int n_procs);
 
     // Write for visualization
@@ -256,6 +245,8 @@ struct BlockedLinearTree {
     void WriteOffsets(string filename);
     void GenFromWriteBlocksStruct(vector<char> buf, double (*start_func)(double, double));
 //    void ReadBlocks();
+
+
 
 
 private:

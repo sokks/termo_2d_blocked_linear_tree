@@ -622,39 +622,6 @@ int LinearTree::FindCell(GlobalNumber_t target, Cell *cell) {
 	return -1;
 }
 
-void LinearTree::GenFromWriteStruct(vector<char>& buf) {
-    max_present_lvl = base_lvl;
-
-    int one_sz = 3 * sizeof(int) + sizeof(double);
-
-    char *p = &buf[0];
-    int pos = 0;
-
-    int lvl_offset = 0;
-    int i_offset = sizeof(int);
-    int j_offset = 2 * sizeof(int);
-    int temp_offset = 3 * sizeof(int);
-
-    while (pos < buf.size()) {
-        Cell c;
-        c.lvl  = * ((int *)(&p[pos+lvl_offset]));
-        c.i    = * ((int *)(&p[pos+i_offset]));
-        c.j    = * ((int *)(&p[pos+j_offset]));
-        c.temp[0] = * ((double *)(&(p[pos+temp_offset])));
-        c.refine_mark = 0;
-        cells.push_back(c);
-
-        // std::cout << "cell pushed pos=" << pos << endl; 
-        if (c.lvl > max_present_lvl) {
-            max_present_lvl = c.lvl;
-        }
-
-        pos += one_sz;
-    }
-
-    cout << "first cell = Cell(" << cells[0].lvl << ", " << cells[0].i << "," << cells[0].j << ", " << cells[0].temp[0] << ")";
-    cout << "last cell = Cell(" << cells[cells.size()-1].lvl << ", " << cells[cells.size()-1].i << "," << cells[cells.size()-1].j << ", " << cells[cells.size()-1].temp[0] << ")";
-}
 
 double get_lvl_dx(int lvl) {
     return  min_dx * pow(2, max_lvl - lvl);
@@ -896,6 +863,169 @@ void BlockedLinearTree::RefineCells() {
     cout << "cells refined, new max_present_lvl = " << max_present_lvl << endl;
 }
 
+void BlockedLinearTree::BuildNeighs() {
+    cout << "building neighs\n";
+
+    for (int i = 0; i < blocks.size(); i++) {
+
+        if (!blocks[i].idx.is_left_border()) {
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::LEFT);
+            BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
+            blocks[i].neighs_left = find_block_children(possible_neigh->idx, Neigh::RIGHT);
+        }
+
+        if (!blocks[i].idx.is_right_border()) {
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::RIGHT);
+            BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
+            blocks[i].neighs_right = find_block_children(possible_neigh->idx, Neigh::LEFT);
+        }
+
+        if (!blocks[i].idx.is_upper_border()) {
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::UP);
+            BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
+            blocks[i].neighs_upper = find_block_children(possible_neigh->idx, Neigh::DOWN);
+        }
+
+        if (!blocks[i].idx.is_down_border()) {
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::DOWN);
+            BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
+            blocks[i].neighs_down = find_block_children(possible_neigh->idx, Neigh::UP);
+        }
+
+    }
+
+    for (int i = 0; i < blocks.size(); i++) {
+        // left
+        for (BlockOfCells *b_ptr: blocks[i].neighs_left) {
+            if(std::find(b_ptr->neighs_right.begin(), b_ptr->neighs_right.end(), &blocks[i]) == b_ptr->neighs_right.end()) {
+                // не делаю сортировку потому что в таком случае должен
+                // быть всего один сосед больший по размеру
+                b_ptr->neighs_right.insert(b_ptr->neighs_right.begin(), &blocks[i]);
+            }
+        }
+
+        // right
+        for (BlockOfCells *b_ptr: blocks[i].neighs_right) {
+            if(std::find(b_ptr->neighs_left.begin(), b_ptr->neighs_left.end(), &blocks[i]) == b_ptr->neighs_left.end()) {
+                b_ptr->neighs_left.insert(b_ptr->neighs_left.begin(), &blocks[i]);
+            }
+        }
+
+        // upper
+        for (BlockOfCells *b_ptr: blocks[i].neighs_upper) {
+            if(std::find(b_ptr->neighs_down.begin(), b_ptr->neighs_down.end(), &blocks[i]) == b_ptr->neighs_down.end()) {
+                b_ptr->neighs_down.insert(b_ptr->neighs_down.begin(), &blocks[i]);
+            }
+        }
+
+        // down
+        for (BlockOfCells *b_ptr: blocks[i].neighs_down) {
+            if(std::find(b_ptr->neighs_upper.begin(), b_ptr->neighs_upper.end(), &blocks[i]) == b_ptr->neighs_upper.end()) {
+                b_ptr->neighs_upper.insert(b_ptr->neighs_upper.begin(), &blocks[i]);
+            }
+        }
+    }
+
+    cout << "built neighs\n";
+}
+
+BlockOfCells* BlockedLinearTree::find_block(TreeIndex target) {
+
+    GlobalNumber_t t = target.get_global_number();
+
+    // binary search
+    int left = 0;
+    int right = blocks.size();
+    while (left < right) {
+        int midi = (right + left) / 2;
+        BlockOfCells mid = blocks[midi];
+        GlobalNumber_t val = mid.idx.get_global_number();
+        if (val == t) {
+            return &mid;
+        }
+        if (val < t) {
+            left = midi + 1;
+        } else {
+            right = midi;
+        }
+    }
+    return nullptr;
+}
+
+BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
+
+    GlobalNumber_t t = target;
+
+    // binary search
+    int left = 0;
+    int right = blocks.size();
+    while (left < right) {
+        int midi = (right + left) / 2;
+        BlockOfCells mid = blocks[midi];
+        GlobalNumber_t val = mid.idx.get_global_number();
+        if (val == t) {
+            return &mid;
+        }
+        if (val < t) {
+            left = midi + 1;
+        } else {
+            right = midi;
+        }
+    }
+    return nullptr;
+}
+
+vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, Neigh n) {
+
+    list<BlockOfCells*> res_list;
+
+    BlockOfCells *t_blk = find_block(target);
+    res_list.push_back(t_blk);
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+
+        int i = 0;
+        while (i < res_list.size()) {
+            // find two needed children
+            Child ch1, ch2;
+            if (n == Neigh::LEFT) {
+                ch1 = Child::cLD; ch2 = Child::cLU;
+            } else if (n == Neigh::RIGHT) {
+                ch1 = Child::cRD; ch2 = Child::cRU;
+            } else if (n == Neigh::UP) {
+                ch1 = Child::cLU; ch2 = Child::cRU;
+            } else if (n == Neigh::DOWN) {
+                ch1 = Child::cLD; ch2 = Child::cRD;
+            }
+
+            GlobalNumber_t t1 = target.get_child(ch1).get_global_number();
+            GlobalNumber_t t2 = target.get_child(ch2).get_global_number();
+
+            BlockOfCells *b1, *b2;
+            b1 = find_block(t1);
+            b2 = find_block(t2);
+
+            // update children list
+            if (b1 && b2) {
+                list<BlockOfCells*>::iterator itr = res_list.begin();
+                std::advance(itr, i);
+                res_list.erase(itr);
+                res_list.insert(itr, b2);
+                res_list.insert(itr, b1);
+
+                changed = 1;
+                i += 2;
+            } else {
+                i++;
+            }
+        }
+    }
+
+    vector<BlockOfCells*> res(res_list.begin(), res_list.end());
+    return res;
+}
+
 void BlockedLinearTree::Decompose(int n_procs) {
     cout << "decomposing grid\n";
 
@@ -995,6 +1125,43 @@ GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cel
     return res;
 }
 
+int check_cell_owner(GlobalNumber_t blk_i, GlobalNumber_t cell_i) {
+    GlobalNumber_t mask(-1);
+    mask = mask << 2*(max_lvl - max_blk_lvl);
+    return (cell_i & mask) ==  blk_i;
+}
+
+// НЕ ОБРАЩАТЬСЯ К ЯЧЕЙКАМ БЛОКА В ЭТОЙ ФУНКЦИИ!!!
+vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx, int cell_lvl, BlockOfCells* blk, Neigh neigh_dir) {
+
+    int neigh_lvl = blk->cells_lvl;
+
+    if (abs(cell_lvl - neigh_lvl) > 1) {
+        cout << "[ERROR] not balanced grid!\n";
+        exit(-1);
+    }
+
+    TreeIndex c_idx = TreeIndex(cell_lvl, cell_glob_idx);
+    vector<TreeIndex> neighs;
+    if (neigh_lvl > cell_lvl) {
+        neighs = c_idx.get_halfsize_possible_face_neighbours(neigh_dir);
+    } else if (neigh_lvl < cell_lvl) {
+        neighs = c_idx.get_larger_possible_face_neighbour(neigh_dir);
+    } else {
+        neighs.push_back(c_idx.get_face_neighbor(neigh_dir));
+    }
+
+    vector<GlobalNumber_t> res;
+    for (TreeIndex& n_idx: neighs) {
+        GlobalNumber_t n = n_idx.get_global_number();
+        if (check_cell_owner(blk->idx.get_global_number(), n)) {
+            res.push_back(n);
+        }
+    }
+
+    return res;
+}
+
 
 void BlockedLinearTree::WriteBlocks(string filename) {
     vector<char> buf = GenWriteBlocksStruct();
@@ -1042,6 +1209,54 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
         for (int i = 0; i < sizeof(int); i++) {
             buf.push_back(tmp[i]);
         }
+
+        // left neighs
+        for (int i = 0; i < pow(2, max_blk_lvl-base_blk_lvl); i++) {
+            GlobalNumber_t _neigh(0);
+            if (i < blocks[blk_i].neighs_left.size()) {
+                _neigh = blocks[blk_i].neighs_left[i]->idx.get_global_number();
+            }
+            tmp = (char *)(&_neigh);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+        }
+
+        // right neighs
+        for (int i = 0; i < pow(2, max_blk_lvl-base_blk_lvl); i++) {
+            GlobalNumber_t _neigh(0);
+            if (i < blocks[blk_i].neighs_right.size()) {
+                _neigh = blocks[blk_i].neighs_right[i]->idx.get_global_number();
+            }
+            tmp = (char *)(&_neigh);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+        }
+
+        // upper neighs
+        for (int i = 0; i < pow(2, max_blk_lvl-base_blk_lvl); i++) {
+            GlobalNumber_t _neigh(0);
+            if (i < blocks[blk_i].neighs_upper.size()) {
+                _neigh = blocks[blk_i].neighs_upper[i]->idx.get_global_number();
+            }
+            tmp = (char *)(&_neigh);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+        }
+
+        // down neighs
+        for (int i = 0; i < pow(2, max_blk_lvl-base_blk_lvl); i++) {
+            GlobalNumber_t _neigh(0);
+            if (i < blocks[blk_i].neighs_down.size()) {
+                _neigh = blocks[blk_i].neighs_down[i]->idx.get_global_number();
+            }
+            tmp = (char *)(&_neigh);
+            for (int i = 0; i < sizeof(int); i++) {
+                buf.push_back(tmp[i]);
+            }
+        }
     }
 
     std::cout << " gen structs for write finished\n";
@@ -1049,7 +1264,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
 }
 
 void BlockedLinearTree::WriteOffsets(string filename) {
-    int rec_len = 5 * sizeof(int);
+    int rec_len = 5 * sizeof(int) + 4 * pow(2, max_blk_lvl-base_blk_lvl) * sizeof(GlobalNumber_t);
 
     vector<int> offsets_lens;
 
@@ -1087,16 +1302,22 @@ void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*star
     max_present_lvl = base_lvl;
     max_present_blk_lvl = base_blk_lvl;
 
-    int one_sz = 5 * sizeof(int);
+    int n_neighs = pow(2, max_blk_lvl-base_blk_lvl);
+    int one_sz = 5 * sizeof(int) + 4 * n_neighs * sizeof(GlobalNumber_t);
 
     char *p = &buf[0];
     int pos = 0;
 
-    int lvl_offset = 0;
-    int i_offset = sizeof(int);
-    int j_offset = 2 * sizeof(int);
+    int lvl_offset   = 0;
+    int i_offset     = sizeof(int);
+    int j_offset     = 2 * sizeof(int);
     int c_lvl_offset = 3 * sizeof(int);
-    int sz_offset = 4 * sizeof(int);
+    int sz_offset    = 4 * sizeof(int);
+    int left_offset  = sz_offset    + n_neighs * sizeof(GlobalNumber_t);
+    int right_offset = left_offset  + n_neighs * sizeof(GlobalNumber_t);
+    int upper_offset = right_offset + n_neighs * sizeof(GlobalNumber_t);
+    int down_offset  = upper_offset + n_neighs * sizeof(GlobalNumber_t);
+
 
     while (pos < buf.size()) {
         TreeIndex idx;
@@ -1109,6 +1330,35 @@ void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*star
 
         BlockOfCells blk(idx, cells_lvl, sz);
         blk.CreateCells(start_func);
+
+        GlobalNumber_t tmp(0);
+        for (int j = 0; j < n_neighs; j++) {
+            tmp = * ((GlobalNumber_t *)(&p[pos+left_offset+j* sizeof(GlobalNumber_t)]));
+            if (tmp != 0) {
+                blk.neighs_left_idxs.push_back(tmp);
+            }
+        }
+
+        for (int j = 0; j < n_neighs; j++) {
+            tmp = * ((GlobalNumber_t *)(&p[pos+right_offset+j* sizeof(GlobalNumber_t)]));
+            if (tmp != 0) {
+                blk.neighs_right_idxs.push_back(tmp);
+            }
+        }
+
+        for (int j = 0; j < n_neighs; j++) {
+            tmp = * ((GlobalNumber_t *)(&p[pos+upper_offset+j* sizeof(GlobalNumber_t)]));
+            if (tmp != 0) {
+                blk.neighs_upper_idxs.push_back(tmp);
+            }
+        }
+
+        for (int j = 0; j < n_neighs; j++) {
+            tmp = * ((GlobalNumber_t *)(&p[pos+down_offset+j* sizeof(GlobalNumber_t)]));
+            if (tmp != 0) {
+                blk.neighs_down_idxs.push_back(tmp);
+            }
+        }
 
         blocks.push_back(blk);
 

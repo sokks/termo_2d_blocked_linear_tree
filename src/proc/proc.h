@@ -89,18 +89,31 @@ class Proc {
     int time_step_n = 0;
 
     
-    GlobalNumber_t totalG;
-    GlobalNumber_t procG;
-    GlobalNumber_t offsetG;
+//    GlobalNumber_t totalG;
+//    GlobalNumber_t procG;
+//    GlobalNumber_t offsetG;
     FullMeta meta;
     BlockedLinearTree mesh;
 
-    vector<GlobalNumber_t> *ghosts_out_ids = nullptr;
-    LinearTree *ghosts_in  = nullptr;
-    vector<double> *ghosts_in_temps  = nullptr;
-    vector<double> *ghosts_out_temps = nullptr;
 
+//    vector<GlobalNumber_t> *ghosts_out_ids = nullptr;
+//    LinearTree *ghosts_in  = nullptr;
+//    vector<double> *ghosts_in_temps  = nullptr;
+//    vector<double> *ghosts_out_temps = nullptr;
+
+    map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;
+    vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_in_idxs;
+    vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_out_idxs;
+
+    // todo initialize this when building ghosts and destroy in destuctur
+
+    /// active_neights_num is a number of processors that we have dependencies with
     int active_neighs_num = 0;
+
+    MPI_Request *send_reqs;
+    MPI_Status  *send_statuses;
+    MPI_Request *recv_reqs;
+    MPI_Status  *recv_statuses;
 
 public:
     Proc();
@@ -110,31 +123,31 @@ public:
     int MPIInit(int argc, char **argv);
     int MPIFinalize();
 
-    /// InitMesh создает базовую структуру сетки
-//    int InitMesh();
+    /// InitMesh параллельно считывает сетку из файла и инициализирует ячейки
     int InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double));
 
-    // InitNeighs прописывает соседей блоков
-    int InitNeighs();
-
-    // BuildGhosts строит структуры для обмена границами
+    /// BuildGhosts строит структуры для обмена границами
     int BuildGhosts();
 
-    // ExchangeGhosts обменивается с соседями
+    /// ExchangeGhosts обменивается с соседями
     int StartExchangeGhosts();
     int StopExchangeGhosts();
 
-    // MakeStep делает один временной шаг
+    /// MakeStep делает один временной шаг
     void MakeStep();
 
-    // I/O
+    /// I/O
     void WriteT(string filename);
     void WriteStat(string filename);
 
 private:
 
     int find_owner(GlobalNumber_t cell_id);
-    vector<char> get_write_cells_struct();
+//    vector<char> get_write_cells_struct();
+
+    void build_fake_ghost_blocks();
+    void build_ghost_cells();
+
 
     int ISendGhosts();
     int IRecvGhosts();

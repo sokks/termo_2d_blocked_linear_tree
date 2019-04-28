@@ -68,7 +68,7 @@ run_mpi: bin/test
 job_mpi_polus: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
-	mpisubmit.pl -p $(N_PROCS) bin/test -- $(BASE_LVL) $(MAX_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid.dat $(TIME_STEPS)
+	mpisubmit.pl -p $(N_PROCS) bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS)
 
 bin/test: build/main.o build/area.o build/grid.o build/proc.o Makefile
 	mkdir -p bin

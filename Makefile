@@ -1,5 +1,5 @@
-# COMPILER=mpixlC
-COMPILER=mpicxx
+COMPILER=mpixlC
+# COMPILER=mpicxx
 OPTS=-O0
 
 BASE_LVL=9
@@ -7,7 +7,7 @@ MAX_LVL=12
 BASE_BLK_LVL=2
 MAX_BLK_LVL=6
 
-N_PROCS=1
+N_PROCS=8
 
 TIME_STEPS=3000
 
@@ -65,7 +65,7 @@ run_mpi: bin/test
 	mkdir -p data/temp
 	mpiexec -np $(N_PROCS) bin/test $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS)
 
-job_mpi_polus: bin/test
+polus_job_run_mpi: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
 	mpisubmit.pl -p $(N_PROCS) bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS)

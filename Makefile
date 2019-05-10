@@ -1,6 +1,8 @@
 COMPILER=mpixlC
 # COMPILER=mpicxx
+# COMPILER=mpixlcxx_r
 OPTS=-O0
+# OPTS=-O0 -qsmp=omp
 
 BASE_LVL=9
 MAX_LVL=12
@@ -8,8 +10,10 @@ BASE_BLK_LVL=2
 MAX_BLK_LVL=6
 
 N_PROCS=8
+N_THREADS=2
 
-TIME_STEPS=3000
+TIME_STEPS=30000
+WRITE_FREQ=1000
 
 all: bin
 
@@ -36,6 +40,10 @@ polus_job_gen_grid: bin/gen_grid
 	mkdir -p data/refine
 	mpisubmit.pl -p 1 bin/gen_grid -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/base_grid_blocks.dat data/refine/offsets_$(N_PROCS).dat
 
+bg_job_gen_grid: bin/gen_grid
+	rm -rf data/refine/*
+	mkdir -p data/refine
+	mpisubmit.bg -n 1 -m smp bin/gen_grid -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/base_grid.dat $(N_PROCS) data/refine/base_grid_blocks.dat data/refine/offsets_$(N_PROCS).dat
 
 vis_base_grid: update_txt
 	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/grid_levels_$(BASE_LVL).png Greys lvls
@@ -63,12 +71,28 @@ update_txt: data/refine/base_grid.dat bin/translate
 run_mpi: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
-	mpiexec -np $(N_PROCS) bin/test $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS)
+	mpiexec -np $(N_PROCS) bin/test $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
 
 polus_job_run_mpi: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
-	mpisubmit.pl -p $(N_PROCS) bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS)
+	mpisubmit.pl -p $(N_PROCS) -w 00:30 bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+
+polus_job_run_mpi_omp: bin/test
+	rm -rf data/temp/*
+	mkdir -p data/temp
+	mpisubmit.pl -p $(N_PROCS) -t $(N_THREADS) -w 00:30 bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+
+bg_job_run_mpi: bin/test
+	rm -rf data/temp/*
+	mkdir -p data/temp
+	mpisubmit.bg -n $(N_PROCS) -m smp bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+
+bg_job_run_mpi_omp: bin/test
+	rm -rf data/temp/*
+	mkdir -p data/temp
+	mpisubmit.bg -n $(N_PROCS) -m smp bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+
 
 bin/test: build/main.o build/area.o build/grid.o build/proc.o Makefile
 	mkdir -p bin

@@ -6,7 +6,7 @@ using std::endl;
 
 
 bool WRITE_LAYERS = true;
-int write_freq = 100;
+int write_freq = 1000;
 string baseFolderTemp = "data/temp/";
 
 string gen_filename(string baseFolder, int n) {
@@ -21,7 +21,7 @@ string gen_filename(string baseFolder, int n) {
 
 int main(int argc, char **argv) {
     if (argc < 8) {
-        std::cout << "usage: prog <base_lvl> <max_lvl> <offsets_file> <grid_file> <time_steps>\n";
+        std::cout << "usage: prog <base_lvl> <max_lvl> <base_blk_lvl> <max_blk_lvl> <offsets_file> <grid_file> <time_steps> <write_freq>\n";
         return 0;
     }
     int    base_level     = atoi(argv[1]);
@@ -30,7 +30,8 @@ int main(int argc, char **argv) {
     int    max_blk_level  = atoi(argv[4]);
     string offsets_file   = argv[5];
     string grid_file      = argv[6];
-    int    ts_n           = std::atoi(argv[7]);
+    int    ts_n           = atoi(argv[7]);
+    write_freq            = atoi(argv[8]);
 
     GridInit(base_level, max_level, base_blk_level, max_blk_level);
     SolverInit(ts_n);

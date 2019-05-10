@@ -66,6 +66,7 @@ Proc::Proc() {
     stat.timers["get_border_cond"] = MpiTimer();
     stat.timers["get_possible_neighs"] = MpiTimer();
     stat.timers["sort_neighs"] = MpiTimer();
+    stat.timers["compute_temps"] = MpiTimer();
 }
 
 Proc::~Proc() {
@@ -83,6 +84,7 @@ int Proc::MPIInit(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &mpiInfo.comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpiInfo.comm_size);
 
+    stat.timers["total"].Start();
     return 0;
 }
 int Proc::MPIFinalize() {
@@ -535,7 +537,6 @@ int Proc::StopExchangeGhosts() {
 
     // todo check statuses
 
-    // todo fill got temps
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ((n == mpiInfo.comm_rank) || (fake_blocks_in_ids[n].size() == 0)) {
             continue;
@@ -574,16 +575,23 @@ void Proc::MakeStep() {
 
     time_step_n++;
 
-    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+
+    stat.timers["compute_temps"].Start();
+
+    int blk_i, i, j;
+
+    // внутренние ячейки блока
+    // # pragma omp parallel
+    // # pragma omp for private(blk_i, i, j)
+    for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
 
         double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
         int sz = mesh.blocks[blk_i].sz;
         double l = d;
         double S = d * d;
 
-        // внутренние ячейки блока
-        for (int i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
-            for (int j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
+        for (i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
+            for (j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
                 double flows_sum = 0;
                 double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
 
@@ -607,9 +615,12 @@ void Proc::MakeStep() {
         }
     }
 
+    stat.timers["compute_temps"].Stop();
+
     StopExchangeGhosts();
 
     // границы блоков
+    stat.timers["compute_temps"].Start();
 
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         BlockOfCells& blk = mesh.blocks[blk_i];
@@ -660,10 +671,9 @@ void Proc::MakeStep() {
                 }
             }
         }
-
-
     }
 
+    stat.timers["compute_temps"].Stop();
 
 //    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++){
 //

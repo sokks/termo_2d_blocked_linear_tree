@@ -6,6 +6,7 @@
 #include <sstream>
 #include <algorithm>
 #include <unistd.h>
+// #include <omp.h>
 
 #include "../area/area.h"
 #include "../grid/grid.h"

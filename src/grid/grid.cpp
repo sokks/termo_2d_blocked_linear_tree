@@ -504,7 +504,7 @@ vector<GlobalNumber_t> TreeIndex::get_all_possible_neighbours_ids() {
     // cout << " }" << endl;
 
     sort(all_neighs_ids.begin(), all_neighs_ids.end());
-    auto last = std::unique(all_neighs_ids.begin(), all_neighs_ids.end());
+    vector<GlobalNumber_t>::iterator last = std::unique(all_neighs_ids.begin(), all_neighs_ids.end());
     all_neighs_ids.erase(last, all_neighs_ids.end());
 
     return all_neighs_ids;
@@ -955,7 +955,7 @@ void BlockedLinearTree::BuildNeighs() {
         }
 
         // down
-        for (int jjj = 0; jjj < blocks[i].neighs_neighs_downupper.size(); jjj++) {
+        for (int jjj = 0; jjj < blocks[i].neighs_down.size(); jjj++) {
             BlockOfCells *b_ptr = blocks[i].neighs_down[jjj];
             if(std::find(b_ptr->neighs_upper.begin(), b_ptr->neighs_upper.end(), &blocks[i]) == b_ptr->neighs_upper.end()) {
                 b_ptr->neighs_upper.insert(b_ptr->neighs_upper.begin(), &blocks[i]);
@@ -1102,9 +1102,9 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
     }
 
     vector<BlockOfCells*> res;
-    for (TreeIndex idx: res_idxs) {
+    for (int jjj = 0; jjj < res_idxs.size(); jjj++) {
         // cout << "1";
-        res.push_back(find_block(idx));
+        res.push_back(find_block(res_idxs[jjj]));
     }
     // cout << res.size() << endl;
 
@@ -1163,7 +1163,7 @@ void BlockedLinearTree::Write(string filename) {
     vector<char> buf = GenWriteStruct(0);
     int len = buf.size();
 
-    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    std::ofstream fout(filename.c_str(), std::ios::out | std::ios::binary);
     fout.write(&buf[0], len);
     fout.close();
     cout << "grid written\n";
@@ -1422,7 +1422,7 @@ void BlockedLinearTree::WriteOffsets(string filename) {
     }
     cout << "}" << endl;
 
-    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    std::ofstream fout(filename.c_str(), std::ios::out | std::ios::binary);
     fout.write((char *)&offsets_lens[0], offsets_lens.size() * sizeof(int));
     fout.close();
 }

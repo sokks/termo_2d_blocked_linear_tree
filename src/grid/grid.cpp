@@ -115,13 +115,13 @@ TreeIndex TreeIndex::get_child(Child c) {
     child.lvl = lvl+1;
     int h = 1 << (max_lvl - child.lvl);
 
-    if (c == Child::cLD) {        // (0,0)
+    if (c == cLD) {        // (0,0)
         child.i = i;
         child.j = j;
-    } else if (c == Child::cRD) { // (0,1)
+    } else if (c == cRD) { // (0,1)
         child.i = i;
         child.j = j + h;
-    } else if (c == Child::cLU) { // (1,0)
+    } else if (c == cLU) { // (1,0)
         child.i = i + h;
         child.j = j;
     } else {                     // (1,1)
@@ -144,26 +144,26 @@ Child TreeIndex::get_child_pos() {
     int hi = i & (1 << (max_lvl - lvl));
     int hj = j & (1 << (max_lvl - lvl));
     if ((hi == 0) && (hj == 0)) {
-        return Child::cLD;
+        return cLD;
     }
     if ((hi == 0) && (hj != 0)) {
-        return Child::cRD;
+        return cRD;
     }
     if ((hi != 0) && (hj == 0)) {
-        return Child::cLU;
+        return cLU;
     }
     if ((hi != 0) && (hj != 0)) {
-        return Child::cRU;
+        return cRU;
     }
-    return Child::cLD;
+    return cLD;
 }
 
 TreeIndex TreeIndex::get_face_neighbor(Neigh n) {
     int h = 1 << (max_lvl - lvl); // 2^(b-l)
     TreeIndex c;
     c.lvl = lvl;
-    c.i   = i + ((n == Neigh::DOWN) ? -h : (n == Neigh::UP) ? h : 0);
-    c.j   = j + ((n == Neigh::LEFT) ? -h : (n == Neigh::RIGHT) ? h : 0);
+    c.i   = i + ((n == DOWN) ? -h : (n == UP) ? h : 0);
+    c.j   = j + ((n == LEFT) ? -h : (n == RIGHT) ? h : 0);
     return c;
 }
 
@@ -171,8 +171,8 @@ TreeIndex TreeIndex::get_corner_neighbor(CornerNeigh n) {
     int h = 1 << (max_lvl - lvl - 1); // 2^(b-l)
     TreeIndex c;
     c.lvl = lvl;
-    c.i   = i + ( ((n == CornerNeigh::LU) || (n == CornerNeigh::LD)) ? -h : h);
-    c.j   = j + ( ((n == CornerNeigh::LD) || (n == CornerNeigh::RD)) ? -h : h);
+    c.i   = i + ( ((n == LU) || (n == LD)) ? -h : h);
+    c.j   = j + ( ((n == LD) || (n == RD)) ? -h : h);
     return c;
 }
 
@@ -180,8 +180,8 @@ vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
     vector<TreeIndex> ret;
 
     Child my_pos = get_child_pos();
-    if (n == Neigh::RIGHT) {
-        if ((my_pos == Child::cLD) || (my_pos == Child::cLU)) {
+    if (n == RIGHT) {
+        if ((my_pos == cLD) || (my_pos == cLU)) {
             return ret;
         }
         TreeIndex c = get_parent();
@@ -189,8 +189,8 @@ vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
         return ret;
     }
 
-    if (n == Neigh::LEFT) {
-        if ((my_pos == Child::cRD) || (my_pos == Child::cRU)) {
+    if (n == LEFT) {
+        if ((my_pos == cRD) || (my_pos == cRU)) {
             return ret;
         }
         TreeIndex c = get_parent();
@@ -198,8 +198,8 @@ vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
         return ret;
     }
 
-    if (n == Neigh::UP) {
-        if ((my_pos == Child::cLD) || (my_pos == Child::cRD)) {
+    if (n == UP) {
+        if ((my_pos == cLD) || (my_pos == cRD)) {
             return ret;
         }
         TreeIndex c = get_parent();
@@ -207,8 +207,8 @@ vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
         return ret;
     }
     
-    if (n == Neigh::DOWN) {
-        if ((my_pos == Child::cLU) || (my_pos == Child::cRU)) {
+    if (n == DOWN) {
+        if ((my_pos == cLU) || (my_pos == cRU)) {
             return ret;
         }
         TreeIndex c = get_parent();
@@ -221,8 +221,8 @@ vector<TreeIndex> TreeIndex::get_larger_possible_face_neighbour(Neigh n) {
 
 vector<TreeIndex>& TreeIndex::get_larger_possible_face_neighbour_optimized(vector<TreeIndex>& buf, Neigh n) {
     Child my_pos = get_child_pos();
-    if (n == Neigh::RIGHT) {
-        if ((my_pos == Child::cLD) || (my_pos == Child::cLU)) {
+    if (n == RIGHT) {
+        if ((my_pos == cLD) || (my_pos == cLU)) {
             return buf;
         }
         TreeIndex c = get_parent();
@@ -230,8 +230,8 @@ vector<TreeIndex>& TreeIndex::get_larger_possible_face_neighbour_optimized(vecto
         return buf;
     }
 
-    if (n == Neigh::LEFT) {
-        if ((my_pos == Child::cRD) || (my_pos == Child::cRU)) {
+    if (n == LEFT) {
+        if ((my_pos == cRD) || (my_pos == cRU)) {
             return buf;
         }
         TreeIndex c = get_parent();
@@ -239,8 +239,8 @@ vector<TreeIndex>& TreeIndex::get_larger_possible_face_neighbour_optimized(vecto
         return buf;
     }
 
-    if (n == Neigh::UP) {
-        if ((my_pos == Child::cLD) || (my_pos == Child::cRD)) {
+    if (n == UP) {
+        if ((my_pos == cLD) || (my_pos == cRD)) {
             return buf;
         }
         TreeIndex c = get_parent();
@@ -248,8 +248,8 @@ vector<TreeIndex>& TreeIndex::get_larger_possible_face_neighbour_optimized(vecto
         return buf;
     }
     
-    if (n == Neigh::DOWN) {
-        if ((my_pos == Child::cLU) || (my_pos == Child::cRU)) {
+    if (n == DOWN) {
+        if ((my_pos == cLU) || (my_pos == cRU)) {
             return buf;
         }
         TreeIndex c = get_parent();
@@ -264,23 +264,23 @@ vector<TreeIndex> TreeIndex::get_larger_possible_corner_neighbour(CornerNeigh n)
     vector<TreeIndex> ret;
 
     Child my_pos = get_child_pos();
-    if (n == CornerNeigh::LD) {
-        if (my_pos != Child::cRU) {
+    if (n == LD) {
+        if (my_pos != cRU) {
             return ret;
         }
     }
-    if (n == CornerNeigh::LU) {
-        if (my_pos != Child::cRD) {
+    if (n == LU) {
+        if (my_pos != cRD) {
             return ret;
         }
     }
-    if (n == CornerNeigh::LD) {
-        if (my_pos != Child::cRU) {
+    if (n == LD) {
+        if (my_pos != cRU) {
             return ret;
         }
     }
-    if (n == CornerNeigh::LD) {
-        if (my_pos != Child::cRU) {
+    if (n == LD) {
+        if (my_pos != cRU) {
             return ret;
         }
     }
@@ -294,24 +294,24 @@ vector<TreeIndex> TreeIndex::get_halfsize_possible_face_neighbours(Neigh n) {
     TreeIndex fullSizeNeigh = get_face_neighbor(n);
     vector<TreeIndex> halfSizeNeighs;
     halfSizeNeighs.reserve( 2 );
-    if (n == Neigh::DOWN) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLU));
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRU));
+    if (n == DOWN) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLU));
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRU));
         return halfSizeNeighs;
     }
-    if (n == Neigh::UP) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLD));
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRD));
+    if (n == UP) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLD));
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRD));
         return halfSizeNeighs;
     }
-    if (n == Neigh::LEFT) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRU));
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRD));
+    if (n == LEFT) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRU));
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRD));
         return halfSizeNeighs;
     }
-    if (n == Neigh::RIGHT) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLU));
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLD));
+    if (n == RIGHT) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLU));
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLD));
         return halfSizeNeighs;
     }
     return halfSizeNeighs;
@@ -319,24 +319,24 @@ vector<TreeIndex> TreeIndex::get_halfsize_possible_face_neighbours(Neigh n) {
 
 vector<TreeIndex>& TreeIndex::get_halfsize_possible_face_neighbours_optimized(vector<TreeIndex>& buf, Neigh n) {
     TreeIndex fullSizeNeigh = get_face_neighbor(n);
-    if (n == Neigh::DOWN) {
-        buf.push_back(fullSizeNeigh.get_child(Child::cLU));
-        buf.push_back(fullSizeNeigh.get_child(Child::cRU));
+    if (n == DOWN) {
+        buf.push_back(fullSizeNeigh.get_child(cLU));
+        buf.push_back(fullSizeNeigh.get_child(cRU));
         return buf;
     }
-    if (n == Neigh::UP) {
-        buf.push_back(fullSizeNeigh.get_child(Child::cLD));
-        buf.push_back(fullSizeNeigh.get_child(Child::cRD));
+    if (n == UP) {
+        buf.push_back(fullSizeNeigh.get_child(cLD));
+        buf.push_back(fullSizeNeigh.get_child(cRD));
         return buf;
     }
-    if (n == Neigh::LEFT) {
-        buf.push_back(fullSizeNeigh.get_child(Child::cRU));
-        buf.push_back(fullSizeNeigh.get_child(Child::cRD));
+    if (n == LEFT) {
+        buf.push_back(fullSizeNeigh.get_child(cRU));
+        buf.push_back(fullSizeNeigh.get_child(cRD));
         return buf;
     }
-    if (n == Neigh::RIGHT) {
-        buf.push_back(fullSizeNeigh.get_child(Child::cLU));
-        buf.push_back(fullSizeNeigh.get_child(Child::cLD));
+    if (n == RIGHT) {
+        buf.push_back(fullSizeNeigh.get_child(cLU));
+        buf.push_back(fullSizeNeigh.get_child(cLD));
         return buf;
     }
 
@@ -346,20 +346,20 @@ vector<TreeIndex>& TreeIndex::get_halfsize_possible_face_neighbours_optimized(ve
 vector<TreeIndex> TreeIndex::get_halfsize_possible_corner_neighbours(CornerNeigh n) {
     TreeIndex fullSizeNeigh = get_corner_neighbor(n);
     vector<TreeIndex> halfSizeNeighs;
-    if (n == CornerNeigh::LU) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRD));
+    if (n == LU) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRD));
         return halfSizeNeighs;
     }
-    if (n == CornerNeigh::RU) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLD));
+    if (n == RU) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLD));
         return halfSizeNeighs;
     }
-    if (n == CornerNeigh::LD) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cRU));
+    if (n == LD) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cRU));
         return halfSizeNeighs;
     }
-    if (n == CornerNeigh::RD) {
-        halfSizeNeighs.push_back(fullSizeNeigh.get_child(Child::cLU));
+    if (n == RD) {
+        halfSizeNeighs.push_back(fullSizeNeigh.get_child(cLU));
         return halfSizeNeighs;
     }
     return halfSizeNeighs;
@@ -370,16 +370,16 @@ vector<TreeIndex> TreeIndex::get_all_halfsize_possible_neighs() {
     res.reserve( 8 );
 
     if (!is_left_border()) {
-        res = get_halfsize_possible_face_neighbours_optimized(res, Neigh::LEFT);
+        res = get_halfsize_possible_face_neighbours_optimized(res, LEFT);
     }
     if (!is_right_border()) {
-        res = get_halfsize_possible_face_neighbours_optimized(res, Neigh::RIGHT);
+        res = get_halfsize_possible_face_neighbours_optimized(res, RIGHT);
     }
     if (!is_upper_border()) {
-        res = get_halfsize_possible_face_neighbours_optimized(res, Neigh::UP);
+        res = get_halfsize_possible_face_neighbours_optimized(res, UP);
     }
     if (!is_down_border()) {
-        res = get_halfsize_possible_face_neighbours_optimized(res, Neigh::DOWN);
+        res = get_halfsize_possible_face_neighbours_optimized(res, DOWN);
     }
 
     return res;
@@ -388,16 +388,16 @@ vector<TreeIndex> TreeIndex::get_all_halfsize_possible_neighs() {
 vector<TreeIndex>& TreeIndex::get_all_halfsize_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
-        buf = get_halfsize_possible_face_neighbours_optimized(buf, Neigh::LEFT);
+        buf = get_halfsize_possible_face_neighbours_optimized(buf, LEFT);
     }
     if (!is_right_border()) {
-        buf = get_halfsize_possible_face_neighbours_optimized(buf, Neigh::RIGHT);
+        buf = get_halfsize_possible_face_neighbours_optimized(buf, RIGHT);
     }
     if (!is_upper_border()) {
-        buf = get_halfsize_possible_face_neighbours_optimized(buf, Neigh::UP);
+        buf = get_halfsize_possible_face_neighbours_optimized(buf, UP);
     }
     if (!is_down_border()) {
-        buf = get_halfsize_possible_face_neighbours_optimized(buf, Neigh::DOWN);
+        buf = get_halfsize_possible_face_neighbours_optimized(buf, DOWN);
     }
 
     return buf;
@@ -408,16 +408,16 @@ vector<TreeIndex> TreeIndex::get_all_samesize_possible_neighs() {
     res.reserve( 4 );
 
     if (!is_left_border()) {
-        res.push_back(get_face_neighbor(Neigh::LEFT));
+        res.push_back(get_face_neighbor(LEFT));
     }
     if (!is_right_border()) {
-        res.push_back(get_face_neighbor(Neigh::RIGHT));
+        res.push_back(get_face_neighbor(RIGHT));
     }
     if (!is_down_border()) {
-        res.push_back(get_face_neighbor(Neigh::DOWN));
+        res.push_back(get_face_neighbor(DOWN));
     }
     if (!is_upper_border()) {
-        res.push_back(get_face_neighbor(Neigh::UP));
+        res.push_back(get_face_neighbor(UP));
     }
 
     return res;
@@ -426,16 +426,16 @@ vector<TreeIndex> TreeIndex::get_all_samesize_possible_neighs() {
 vector<TreeIndex>& TreeIndex::get_all_samesize_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
-        buf.push_back(get_face_neighbor(Neigh::LEFT));
+        buf.push_back(get_face_neighbor(LEFT));
     }
     if (!is_right_border()) {
-        buf.push_back(get_face_neighbor(Neigh::RIGHT));
+        buf.push_back(get_face_neighbor(RIGHT));
     }
     if (!is_down_border()) {
-        buf.push_back(get_face_neighbor(Neigh::DOWN));
+        buf.push_back(get_face_neighbor(DOWN));
     }
     if (!is_upper_border()) {
-        buf.push_back(get_face_neighbor(Neigh::UP));
+        buf.push_back(get_face_neighbor(UP));
     }
 
     return buf;
@@ -446,16 +446,16 @@ vector<TreeIndex> TreeIndex::get_all_larger_possible_neighs() {
     res.reserve(4);
 
     if (!is_left_border()) {
-        res = get_larger_possible_face_neighbour_optimized(res, Neigh::LEFT);
+        res = get_larger_possible_face_neighbour_optimized(res, LEFT);
     }
     if (!is_right_border()) {
-        res = get_larger_possible_face_neighbour_optimized(res, Neigh::RIGHT);
+        res = get_larger_possible_face_neighbour_optimized(res, RIGHT);
     }
     if (!is_upper_border()) {
-        res = get_larger_possible_face_neighbour_optimized(res, Neigh::UP);
+        res = get_larger_possible_face_neighbour_optimized(res, UP);
     }
     if (!is_down_border()) {
-        res = get_larger_possible_face_neighbour_optimized(res, Neigh::DOWN);
+        res = get_larger_possible_face_neighbour_optimized(res, DOWN);
     }
 
     return res;
@@ -464,16 +464,16 @@ vector<TreeIndex> TreeIndex::get_all_larger_possible_neighs() {
 vector<TreeIndex>& TreeIndex::get_all_larger_possible_neighs_optimized(vector<TreeIndex>& buf) {
 
     if (!is_left_border()) {
-        buf = get_larger_possible_face_neighbour_optimized(buf, Neigh::LEFT);
+        buf = get_larger_possible_face_neighbour_optimized(buf, LEFT);
     }
     if (!is_right_border()) {
-        buf = get_larger_possible_face_neighbour_optimized(buf, Neigh::RIGHT);
+        buf = get_larger_possible_face_neighbour_optimized(buf, RIGHT);
     }
     if (!is_upper_border()) {
-        buf = get_larger_possible_face_neighbour_optimized(buf, Neigh::UP);
+        buf = get_larger_possible_face_neighbour_optimized(buf, UP);
     }
     if (!is_down_border()) {
-        buf = get_larger_possible_face_neighbour_optimized(buf, Neigh::DOWN);
+        buf = get_larger_possible_face_neighbour_optimized(buf, DOWN);
     }
 
     return buf;
@@ -510,22 +510,22 @@ vector<GlobalNumber_t> TreeIndex::get_all_possible_neighbours_ids() {
 }
 
 bool TreeIndex::is_left_border() {
-    TreeIndex c = get_face_neighbor(Neigh::LEFT);
+    TreeIndex c = get_face_neighbor(LEFT);
     return (c.j < 0);
 }
 
 bool TreeIndex::is_right_border() {
-    TreeIndex c = get_face_neighbor(Neigh::RIGHT);
+    TreeIndex c = get_face_neighbor(RIGHT);
     return ((c.j & (-1 << max_lvl)) != 0);
 }
 
 bool TreeIndex::is_upper_border() {
-    TreeIndex c = get_face_neighbor(Neigh::UP);
+    TreeIndex c = get_face_neighbor(UP);
     return ((c.i & (-1 << max_lvl)) != 0);
 }
 
 bool TreeIndex::is_down_border() {
-    TreeIndex c = get_face_neighbor(Neigh::DOWN);
+    TreeIndex c = get_face_neighbor(DOWN);
     return (c.i < 0);
 }
 
@@ -710,28 +710,28 @@ vector<BlockOfCells> BlockOfCells::Split(double (*Temp_func)(double, double)) {
 
 //? здесь бага ( sz/2 = 0 ) если он был равен 1 (т.е. уровень блока был равен уровню ячейки)
 
-    BlockOfCells bc00 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cLD).get_global_number());
+    BlockOfCells bc00 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(cLD).get_global_number());
     bc00.CreateCells(Temp_func);
     if (refine_marks[0]) {
         bc00.refine_mark = 1;
     }
     children.push_back(bc00);
 
-    BlockOfCells bc01 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cRD).get_global_number());
+    BlockOfCells bc01 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(cRD).get_global_number());
     bc01.CreateCells(Temp_func);
     if (refine_marks[1]) {
         bc01.refine_mark = 1;
     }
     children.push_back(bc01);
 
-    BlockOfCells bc10 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cLU).get_global_number());
+    BlockOfCells bc10 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(cLU).get_global_number());
     bc10.CreateCells(Temp_func);
     if (refine_marks[2]) {
         bc10.refine_mark = 1;
     }
     children.push_back(bc10);
 
-    BlockOfCells bc11 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(Child::cRU).get_global_number());
+    BlockOfCells bc11 = BlockOfCells(cells_lvl, idx.lvl+1, sz/2, idx.get_child(cRU).get_global_number());
     bc11.CreateCells(Temp_func);
     if (refine_marks[3]) {
         bc11.refine_mark = 1;
@@ -855,37 +855,37 @@ void BlockedLinearTree::BuildNeighs() {
         // cout << "BN " << i << " h1\n";
         if (!blocks[i].idx.is_left_border()) {
             // cout << "BN " << i << " h11\n";
-            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::LEFT);
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(LEFT);
             // cout << "BN " << i << " h12\n";
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
             // cout << "BN " << i << " h13 idx=" << possible_neigh_idx.get_global_number() << std::endl;
             if (possible_neigh != nullptr) {
-                blocks[i].neighs_left = find_block_children(possible_neigh_idx, Neigh::RIGHT);
+                blocks[i].neighs_left = find_block_children(possible_neigh_idx, RIGHT);
             }
             // cout << "BN " << i << " h14\n";
         }
 
         // cout << "BN " << i << " h2\n";
         if (!blocks[i].idx.is_right_border()) {
-            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::RIGHT);
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(RIGHT);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
             if (possible_neigh != nullptr) {
-                blocks[i].neighs_right = find_block_children(possible_neigh_idx, Neigh::LEFT);
+                blocks[i].neighs_right = find_block_children(possible_neigh_idx, LEFT);
             }
         }
 
         // cout << "BN " << i << " h3\n";
         if (!blocks[i].idx.is_upper_border()) {
-            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::UP);
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(UP);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
             if (possible_neigh != nullptr) {
-                blocks[i].neighs_upper = find_block_children(possible_neigh_idx, Neigh::DOWN);
+                blocks[i].neighs_upper = find_block_children(possible_neigh_idx, DOWN);
             }
         }
 
         // cout << "BN " << i << " h3\n";
         if (!blocks[i].idx.is_down_border()) {
-            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(Neigh::DOWN);
+            TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(DOWN);
             // if (blocks[i].idx.get_global_number() == GlobalNumber_t(2048)) {
             //     cout << "For 2048 down: " << possible_neigh_idx.get_global_number() << " " << possible_neigh_idx.lvl << endl;
             // }
@@ -894,7 +894,7 @@ void BlockedLinearTree::BuildNeighs() {
             //     cout << "find(512) = " << possible_neigh << endl;
             // }
             if (possible_neigh != nullptr) {
-                blocks[i].neighs_down = find_block_children(possible_neigh_idx, Neigh::UP);
+                blocks[i].neighs_down = find_block_children(possible_neigh_idx, UP);
             }
         }
 
@@ -1061,14 +1061,14 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
 
             // find two needed children
             Child ch1, ch2;
-            if (n == Neigh::LEFT) {
-                ch1 = Child::cLD; ch2 = Child::cLU;
-            } else if (n == Neigh::RIGHT) {
-                ch1 = Child::cRD; ch2 = Child::cRU;
-            } else if (n == Neigh::UP) {
-                ch1 = Child::cLU; ch2 = Child::cRU;
-            } else if (n == Neigh::DOWN) {
-                ch1 = Child::cLD; ch2 = Child::cRD;
+            if (n == LEFT) {
+                ch1 = cLD; ch2 = cLU;
+            } else if (n == RIGHT) {
+                ch1 = cRD; ch2 = cRU;
+            } else if (n == UP) {
+                ch1 = cLU; ch2 = cRU;
+            } else if (n == DOWN) {
+                ch1 = cLD; ch2 = cRD;
             }
 
             GlobalNumber_t t1 = cur_idx.get_child(ch1).get_global_number();

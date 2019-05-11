@@ -481,7 +481,8 @@ void Proc::build_needed_cells_for_blocks_map() {
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
                     vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, UP);
-                    for (GlobalNumber_t cc: c_neighs) {
+                    for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
+                        GlobalNumber_t cc = c_neighs[jjj2];
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
                         }
@@ -500,7 +501,8 @@ void Proc::build_needed_cells_for_blocks_map() {
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
                     vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, LEFT);
-                    for (GlobalNumber_t cc: c_neighs) {
+                    for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
+                        GlobalNumber_t cc = c_neighs[jjj2];
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
                         }
@@ -519,7 +521,8 @@ void Proc::build_needed_cells_for_blocks_map() {
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
                     vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, RIGHT);
-                    for (GlobalNumber_t cc: c_neighs) {
+                    for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
+                        GlobalNumber_t cc = c_neighs[jjj2];
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
                         }

@@ -9,3 +9,5 @@ CMake*
 cmake*
 *.numbers
 *.paint
+*.out
+*.err

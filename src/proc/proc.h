@@ -92,21 +92,20 @@ class Proc {
     FullMeta meta;
     BlockedLinearTree mesh;
 
-    map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;
-    vector<vector<GlobalNumber_t>> fake_blocks_out_ids;
-    vector<vector<GlobalNumber_t>> fake_blocks_in_ids;
 
-    vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_in_idxs;
-    vector<map<GlobalNumber_t, vector<GlobalNumber_t >>> cells_out_idxs;
+    map<GlobalNumber_t, BlockOfCells*> fake_ghost_blocks;  // блоки без ячеек (map[blk_idx]blk)
+    vector<vector<GlobalNumber_t> > fake_blocks_out_ids;   // айдишники исходящих блоков (первая размерность - ранг процессора)
+    vector<vector<GlobalNumber_t> > fake_blocks_in_ids;    // айдишники входящих блоков  (первая размерность - ранг процессора)
 
-    vector<vector<int>> blocks_cells_out_lens;
-    vector<vector<int>> blocks_cells_in_lens;
-    vector<vector<GlobalNumber_t >> cells_out_idxs_tmp;
-    vector<vector<GlobalNumber_t >> cells_in_idxs_tmp;
-    vector<vector<double>> cells_out_idxs_temps;
-    vector<vector<double>> cells_in_idxs_temps;
+    vector<map<GlobalNumber_t, vector<GlobalNumber_t > > > blocks_cells_in_idxs;  // []map[blk_idx][]blk_cells (первая размерность - ранг процессора)
+    vector<map<GlobalNumber_t, vector<GlobalNumber_t > > > blocks_cells_out_idxs;
 
-    // todo initialize this when building ghosts and destroy in destuctur
+    vector<vector<int>> blocks_cells_out_lens;       // длины массивов айдишников исходящих ячеек по процессам
+    vector<vector<int>> blocks_cells_in_lens;        // длины массивов айдишников входящих блоков по процессам
+    vector<vector<GlobalNumber_t > > cells_out_idxs; // айдишники исходящих ячеек по процессам
+    vector<vector<GlobalNumber_t > > cells_in_idxs;  // айдишники входящих ячеек по процессам
+    vector<vector<double> > cells_out_idxs_temps;    // соответствующие исходящие температуры
+    vector<vector<double> > cells_in_idxs_temps;     // соответствующие входящие температуры
 
     /// active_neights_num is a number of processors that we have dependencies with
     int active_neighs_num = 0;
@@ -150,8 +149,9 @@ private:
 
     void build_fake_ghost_blocks();
     void build_ghost_cells();
-
     void build_needed_cells_for_blocks_map();
+
+    void get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border);
 
     void PrintMyBlocks();
     void PrintGhostCells();

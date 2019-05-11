@@ -76,26 +76,26 @@ double Area::BorderCond3(double x, double y, double t) { // up
 void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(double, double, double)) {
 
     switch (b) {
-        case Border::LEFT: {
+        case LEFT: {
             *cond_type = 1;
             *cond_func = &BorderCond1;
             break;
         }
-        case Border::RIGHT: {
+        case RIGHT: {
             // *cond_type = 2;
             // *cond_func = &BorderCond2;
             *cond_type = 1;
             *cond_func = &BorderCond1;
             break;
         }
-        case Border::UP: {
+        case UP: {
             // *cond_type = 2;
             // *cond_func = &BorderCond3;
             *cond_type = 1;
             *cond_func = &BorderCond1;
             break;
         }
-        case Border::DOWN: {
+        case DOWN: {
             *cond_type = 1;
             *cond_func = &BorderCond1;
             break;

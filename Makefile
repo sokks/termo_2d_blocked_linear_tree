@@ -2,6 +2,7 @@
 # COMPILER=mpicxx
 COMPILER=mpixlcxx
 # COMPILER=mpixlcxx_r
+# OPTS=-O0 -std=c++11
 OPTS=-O0
 # OPTS=-O0 -qsmp=omp
 
@@ -97,41 +98,41 @@ bg_job_run_mpi_omp: bin/test
 
 bin/test: build/main.o build/area.o build/grid.o build/proc.o Makefile
 	mkdir -p bin
-	$(COMPILER) -std=c++11 -o $@ build/main.o build/area.o build/grid.o build/proc.o
+	$(COMPILER) -o $@ build/main.o build/area.o build/grid.o build/proc.o
 
 build/main.o: src/main.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/main.cpp
+	$(COMPILER) $(OPTS) -o $@ -c src/main.cpp
 
 
 bin/gen_grid: build/gen_grid.o build/grid.o build/area.o Makefile
 	mkdir -p bin
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ build/gen_grid.o build/grid.o build/area.o
+	$(COMPILER) $(OPTS) -o $@ build/gen_grid.o build/grid.o build/area.o
 
 build/gen_grid.o: src/gen_grid.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/gen_grid.cpp
+	$(COMPILER) $(OPTS) -o $@ -c src/gen_grid.cpp
 
 
 bin/translate: build/translate.o Makefile
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ build/translate.o
+	$(COMPILER) $(OPTS) -o $@ build/translate.o
 
 build/translate.o: src/translate.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/translate.cpp
+	$(COMPILER) $(OPTS) -o $@ -c src/translate.cpp
 
 
 build/grid.o: src/grid/grid.h src/grid/grid.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/grid/grid.cpp 
+	$(COMPILER) $(OPTS) -o $@ -c src/grid/grid.cpp 
 
 build/proc.o: src/proc/proc.h src/proc/proc.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/proc/proc.cpp 
+	$(COMPILER) $(OPTS) -o $@ -c src/proc/proc.cpp 
 
 build/area.o: src/area/area.h src/area/area.cpp Makefile
 	mkdir -p build
-	$(COMPILER) -std=c++11 $(OPTS) -o $@ -c src/area/area.cpp
+	$(COMPILER) $(OPTS) -o $@ -c src/area/area.cpp
 
 
 clean:

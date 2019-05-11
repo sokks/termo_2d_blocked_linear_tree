@@ -89,7 +89,7 @@ class Proc {
     MpiInfo mpiInfo;
     Stat    stat;
 
-    int time_step_n = 0;
+    int time_step_n;
 
     FullMeta meta;
     BlockedLinearTree mesh;
@@ -110,7 +110,7 @@ class Proc {
     vector<vector<double> > cells_in_idxs_temps;     // соответствующие входящие температуры
 
     /// active_neights_num is a number of processors that we have dependencies with
-    int active_neighs_num = 0;
+    int active_neighs_num;
 
     vector<MPI_Request> send_reqs;
     vector<MPI_Status>  send_statuses;

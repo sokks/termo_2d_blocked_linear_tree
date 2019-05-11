@@ -10,12 +10,15 @@ int write_freq = 1000;
 string baseFolderTemp = "data/temp/";
 
 string gen_filename(string baseFolder, int n) {
-    string num = std::to_string(n);
+    string num = from_num(n);
     int max = 6;
     int additional = max - num.length();
     string res = string(additional, '0') + num;
     string fname = baseFolder + res + ".out";
-    return fname;
+
+    char *fname_c = new char[fname.size()];
+    strcpy(fname_c, fname.c_str());
+    return fname_c;
 }
 
 

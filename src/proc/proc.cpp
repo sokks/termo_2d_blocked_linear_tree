@@ -234,7 +234,7 @@ void Proc::build_fake_ghost_blocks() {
     // сортируем и удаляем повторения
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         std::sort(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
-        auto last = std::unique(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
+        vector<GlobalNumber_t>::iterator last = std::unique(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
         fake_blocks_out_ids[i].erase(last, fake_blocks_out_ids[i].end());
     }
 
@@ -475,7 +475,8 @@ void Proc::build_needed_cells_for_blocks_map() {
         for (int j = 0; j < sz; j++) {
             GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), (sz-1)*sz + j, c_lvl);
 
-            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+            for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_upper_idxs.size(); jjj++) {
+                GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_upper_idxs[jjj];
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
@@ -493,11 +494,12 @@ void Proc::build_needed_cells_for_blocks_map() {
         for (int i = 0; i < sz; i++) {
             GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + 0, c_lvl);
 
-            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+            for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_left_idxs.size(); jjj++) {
+                GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_left_idxs[jjj];
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, DOWN);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, LEFT);
                     for (GlobalNumber_t cc: c_neighs) {
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
@@ -511,11 +513,12 @@ void Proc::build_needed_cells_for_blocks_map() {
         for (int i = 0; i < sz; i++) {
             GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + (sz-1), c_lvl);
 
-            for (GlobalNumber_t n_blk_i: mesh.blocks[blk_i].neighs_down_idxs) {
+            for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_right_idxs.size(); jjj++) {
+                GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_right_idxs[jjj];
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, DOWN);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, RIGHT);
                     for (GlobalNumber_t cc: c_neighs) {
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();

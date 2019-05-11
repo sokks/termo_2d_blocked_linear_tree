@@ -140,7 +140,7 @@ public:
 
     /// I/O
     void WriteT(char* filename);
-    void WriteStat(string filename);
+    void WriteStat();
 
     size_t GetProcAllocMem();
 

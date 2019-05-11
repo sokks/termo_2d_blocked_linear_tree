@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
      }
 
     p.WriteT(gen_filename(baseFolderTemp, ts_n));
-    p.WriteStat("data/stat.out");
+    p.WriteStat();
 
     p.MPIFinalize();
 }

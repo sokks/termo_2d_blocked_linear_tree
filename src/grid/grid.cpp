@@ -784,7 +784,13 @@ int BlockedLinearTree::MarkToRefine() {
         n_of_block_marks += blocks[i].MarkToRefine();
     }
 
-    cout << "refine analysed, n_of_block_marks=" << n_of_block_marks << endl;
+    cout << "refine analysed, n_of_block_marks=" << n_of_block_marks << " block_marks={";
+    for (BlockOfCells& blk: blocks) {
+        if (blk.refine_mark) {
+            cout << blk.idx.get_global_number() << " ";
+        }
+    }
+    cout << "}\n";
     return (n_of_block_marks > 0);
 }
 
@@ -827,6 +833,7 @@ void BlockedLinearTree::RefineCells() {
 
     for (int i = 0; i < blocks.size(); i++) {
         if (blocks[i].refine_mark) {
+            cout << "refinigh cells in blk_idx=" << blocks[i].idx.get_global_number() << endl;
             blocks[i].RefineCells();
             if (blocks[i].cells_lvl > new_max_present_lvl) {
                 new_max_present_lvl = blocks[i].cells_lvl;
@@ -1025,7 +1032,7 @@ BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
 vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, Neigh n) {
 
     // cout << "find_block_children( (" << target.lvl << "," << target.i << "," << target.j << "), " << n <<  ")" << endl;
-    cout << "find_block_children(" << target.get_global_number() << ")" << endl;
+    // cout << "find_block_children(" << target.get_global_number() << ")" << endl;
 
     vector<TreeIndex> res_idxs;
     res_idxs.push_back(target);
@@ -1070,9 +1077,9 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
             b1 = find_block(t1);
             b2 = find_block(t2);
 
-            if (target.get_global_number() == GlobalNumber_t(512)) {
-                cout << "For 512: " << cur_idx.get_global_number() << " " << t1 << " " << t2 << ";" << b1 << " " << b2 << endl;
-            }
+            // if (target.get_global_number() == GlobalNumber_t(512)) {
+            //     cout << "For 512: " << cur_idx.get_global_number() << " " << t1 << " " << t2 << ";" << b1 << " " << b2 << endl;
+            // }
 
             // update children list
             if (b1 && b2) {
@@ -1090,7 +1097,7 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
 
     vector<BlockOfCells*> res;
     for (TreeIndex idx: res_idxs) {
-        cout << "1";
+        // cout << "1";
         res.push_back(find_block(idx));
     }
     cout << res.size() << endl;
@@ -1234,8 +1241,10 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
 
     int neigh_lvl = blk->cells_lvl;
 
+    // cout << "find_cell_neighs_ids_in_blk: cell_idx=" << cell_glob_idx << " cell_lvl=" << cell_lvl << " neigh_blk_idx=" << blk->idx.get_global_number() << " neigh_lvl=" << blk->cells_lvl << endl;
+
     if (abs(cell_lvl - neigh_lvl) > 1) {
-        cout << "[ERROR] not balanced grid!\n";
+        cout << "[ERROR] not 2:1 balanced grid!\n";
         exit(-1);
     }
 
@@ -1279,6 +1288,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
     std::cout << " gen structs for write start\n";
 
     for (int blk_i = 0; blk_i < blocks.size(); blk_i++) {
+        
         int _lvl = blocks[blk_i].idx.lvl;
         char *tmp = (char *)(&_lvl);
         for (int i = 0; i < sizeof(int); i++) {
@@ -1308,6 +1318,8 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
         for (int i = 0; i < sizeof(int); i++) {
             buf.push_back(tmp[i]);
         }
+
+        cout << "writing blk(" << _lvl << " " << _i << " " << _j << " " << _c_lvl << " " << _sz << ")" << endl;
 
         // left neighs
         for (int i = 0; i < pow(2, max_blk_lvl-base_blk_lvl); i++) {
@@ -1351,7 +1363,7 @@ vector<char> BlockedLinearTree::GenWriteBlocksStruct() {
             if (i < blocks[blk_i].neighs_down.size()) {
                 _neigh = blocks[blk_i].neighs_down[i]->idx.get_global_number();
             }
-            cout << "***writing down_neigh " << _neigh << endl;
+            // cout << "***writing down_neigh " << _neigh << endl;
             tmp = (char *)(&_neigh);
             for (int j = 0; j < sizeof(GlobalNumber_t); j++) {
                 buf.push_back(tmp[j]);
@@ -1463,18 +1475,18 @@ void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*star
             }
         }
 
-        cout << "reading down neighs... ";
+        // cout << "reading down neighs... ";
         for (int j = 0; j < n_neighs; j++) {
             tmp = * ((GlobalNumber_t *)(&p[pos+down_offset+j* sizeof(GlobalNumber_t)]));
-            cout << tmp << " ";
+            // cout << tmp << " ";
             if (tmp != -1) {
                 blk.neighs_down_idxs.push_back(tmp);
             }
         }
-        cout << endl;
+        // cout << endl;
 
-        cout << " BlockOfCells created {" << blk.idx.get_global_number() << ", " 
-            << blk.cells_lvl << "," <<  blk.sz << "; " << blk.cells.size() << "; " << blk.neighs_down_idxs.size() << "}\n";
+        // cout << " BlockOfCells created {" << blk.idx.get_global_number() << ", " 
+        //     << blk.cells_lvl << "," <<  blk.sz << "; " << blk.cells.size() << "; " << blk.neighs_down_idxs.size() << "}\n";
 
         blocks.push_back(blk);
 

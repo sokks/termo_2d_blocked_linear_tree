@@ -179,7 +179,8 @@ void Proc::build_fake_ghost_blocks() {
     // строим списки индексов соседей блоков по процессам
     fake_blocks_out_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
-        cout << mpiInfo.comm_rank << " " << mesh.blocks[blk_i].idx.get_global_number() << "  ";
+        GlobalNumber_t blk_num = mesh.blocks[blk_i].idx.get_global_number();
+        cout << mpiInfo.comm_rank << " " << blk_num << "  ";
         // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
             for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
                 cout << mpiInfo.comm_rank << " L: " << neight_num << " ";
@@ -198,30 +199,30 @@ void Proc::build_fake_ghost_blocks() {
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
-                fake_blocks_out_ids[o].push_back(neight_num);
+                fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
-                fake_blocks_out_ids[o].push_back(neight_num);
+                fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
-                fake_blocks_out_ids[o].push_back(neight_num);
+                fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
-                fake_blocks_out_ids[o].push_back(neight_num);
+                fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
     }
 
-    cout << "PARAM1\n";
+    // cout << "PARAM1\n";
 
     // сортируем и удаляем повторения
     for (int i = 0; i < mpiInfo.comm_size; i++) {
@@ -249,13 +250,13 @@ void Proc::build_fake_ghost_blocks() {
     recv_reqs = vector<MPI_Request>(active_neighs_num);
     recv_statuses = vector<MPI_Status>(active_neighs_num);
 
- cout << "PARAM2\n";
+//  cout << "PARAM2\n";
     // обмениваемся длинами чтобы знать сколько блоков от кого принимать
     vector<int> in_lens(mpiInfo.comm_size, 0);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         MPI_Gather(&out_lens[i], 1, MPI_INT, &in_lens[0], 1, MPI_INT, i, mpiInfo.comm);
     }
- cout << "PARAM3\n";
+//  cout << "PARAM3\n";
 
     // (1) обмен айдишниками блоков
     // формируем массивы для приема
@@ -263,7 +264,7 @@ void Proc::build_fake_ghost_blocks() {
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         fake_blocks_in_ids[i] = vector<GlobalNumber_t>(in_lens[i]);
     }
- cout << "PARAM4\n";
+//  cout << "PARAM4\n";
     // отправляем и принимаем
     int req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
@@ -272,14 +273,24 @@ void Proc::build_fake_ghost_blocks() {
             req_num++;
         }
     }
-     cout << "PARAM5\n";
+    //  cout << "PARAM5\n";
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
             MPI_Recv(&fake_blocks_in_ids[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
-     cout << "PARAM6\n";
+
+    // cout << mpiInfo.comm_rank << " fake_blocks_in_ids: ";
+    // for (int n = 0; n < mpiInfo.comm_size; n++) {
+    //     cout << "{" << n << ": ";
+    //     for (GlobalNumber_t idx: fake_blocks_in_ids[n]) {
+    //         cout << idx << " ";
+    //     }
+    //     cout << "} ";
+    // }
+    // cout << endl;
+    //  cout << "PARAM6\n";
     MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
 
 
@@ -289,19 +300,22 @@ void Proc::build_fake_ghost_blocks() {
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         data_fake_blocks_out.push_back(vector<int>());
         for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
+            cout << mpiInfo.comm_rank << " " << fake_blocks_out_ids[i][j] << endl;
             BlockOfCells *blk = mesh.find_block(fake_blocks_out_ids[i][j]);
+
             data_fake_blocks_out[i].push_back(blk->idx.lvl);
             data_fake_blocks_out[i].push_back(blk->cells_lvl);
             data_fake_blocks_out[i].push_back(blk->sz);
         }
     }
-     cout << "PARAM7\n";
+    //  cout << "PARAM7\n";
     // формируем массивы для приема
     vector<vector<int>> data_fake_blocks_in;
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         data_fake_blocks_in.push_back(vector<int>(in_lens[i]*3));
     }
 
+    // cout << "PARAM8\n";
     // отправляем и принимаем
     req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
@@ -310,6 +324,7 @@ void Proc::build_fake_ghost_blocks() {
             req_num++;
         }
     }
+    // cout << "PARAM9\n";
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
@@ -318,17 +333,18 @@ void Proc::build_fake_ghost_blocks() {
     }
     MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
 
-
+    // cout << "PARAM10\n";
     // (3) формируем собственно мапу
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         for (int j = 0; j < in_lens[i]; j++) {
             fake_ghost_blocks[fake_blocks_in_ids[i][j]] = new BlockOfCells(
-                    data_fake_blocks_in[i][j+1], // cells_lvl
-                    data_fake_blocks_in[i][j],   // blk_lvl
-                    data_fake_blocks_in[i][j+2], // sz
+                    data_fake_blocks_in[i][j*3+1], // cells_lvl
+                    data_fake_blocks_in[i][j*3],   // blk_lvl
+                    data_fake_blocks_in[i][j*3+2], // sz
                     fake_blocks_in_ids[i][j]);   // idx
         }
     }
+    // cout << "PARAM11\n";
 
     cout << mpiInfo.comm_rank << " build_fake_ghost_blocks finished\n";
 }

@@ -19,7 +19,7 @@ string from_num(int n) {
     return a;
 }
 
-string gen_filename(string baseFolder, int n) {
+char* gen_filename(string baseFolder, int n) {
     string num = from_num(n);
     int max = 6;
     int additional = max - num.length();

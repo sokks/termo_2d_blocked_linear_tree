@@ -183,41 +183,45 @@ void Proc::build_fake_ghost_blocks() {
     fake_blocks_out_ids = vector<vector<GlobalNumber_t> >(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         GlobalNumber_t blk_num = mesh.blocks[blk_i].idx.get_global_number();
-        cout << mpiInfo.comm_rank << " " << blk_num << "  ";
-        // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
-            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
-                cout << mpiInfo.comm_rank << " L: " << neight_num << " ";
-            }
-            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
-                cout << mpiInfo.comm_rank << " R: " << neight_num << " ";
-            }
-            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
-                cout << mpiInfo.comm_rank << " D: " << neight_num << " ";
-            }
-            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
-                cout << mpiInfo.comm_rank << " U: " << neight_num << " ";
-            }
-            cout << endl;
-        // }
-        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
+        // cout << mpiInfo.comm_rank << " " << blk_num << "  ";
+        // // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
+        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
+        //         cout << mpiInfo.comm_rank << " L: " << neight_num << " ";
+        //     }
+        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
+        //         cout << mpiInfo.comm_rank << " R: " << neight_num << " ";
+        //     }
+        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
+        //         cout << mpiInfo.comm_rank << " D: " << neight_num << " ";
+        //     }
+        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
+        //         cout << mpiInfo.comm_rank << " U: " << neight_num << " ";
+        //     }
+        //     cout << endl;
+        // // }
+        for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_left_idxs.size(); jjj++) {
+            GlobalNumber_t neight_num = mesh.blocks[blk_i].neighs_left_idxs[jjj];
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
                 fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
-        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
+        for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_right_idxs.size(); jjj++) {
+            GlobalNumber_t neight_num = mesh.blocks[blk_i].neighs_right_idxs[jjj];
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
                 fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
-        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
+        for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_upper_idxs.size(); jjj++) {
+            GlobalNumber_t neight_num = mesh.blocks[blk_i].neighs_upper_idxs[jjj];
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
                 fake_blocks_out_ids[o].push_back(blk_num);
             }
         }
-        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
+        for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_down_idxs.size(); jjj++) {
+            GlobalNumber_t neight_num = mesh.blocks[blk_i].neighs_down_idxs[jjj];
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
                 fake_blocks_out_ids[o].push_back(blk_num);
@@ -1088,17 +1092,17 @@ void Proc::MakeStep() {
 
 void Proc::get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border) {
     if (border == DOWN) {
-        Area::get_border_cond(Area::Border::DOWN, cond_type, cond_func);
+        Area::get_border_cond(Area::DOWN, cond_type, cond_func);
     } else if (border == UP) {
-        Area::get_border_cond(Area::Border::UP, cond_type, cond_func);
+        Area::get_border_cond(Area::UP, cond_type, cond_func);
     } else if (border == RIGHT) {
-        Area::get_border_cond(Area::Border::RIGHT, cond_type, cond_func);
+        Area::get_border_cond(Area::RIGHT, cond_type, cond_func);
     } else if (border == LEFT) {
-        Area::get_border_cond(Area::Border::LEFT, cond_type, cond_func);
+        Area::get_border_cond(Area::LEFT, cond_type, cond_func);
     }
 }
 
-void Proc::WriteT(string filename) {
+void Proc::WriteT(char * filename) {
     stat.timers["io"].Start();
 
     vector<char> buf = mesh.GenWriteStruct(1);
@@ -1116,7 +1120,7 @@ void Proc::WriteT(string filename) {
 
     MPI_File fh;
     MPI_File_open( mpiInfo.comm, 
-                filename.c_str(), MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+                filename, MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
     MPI_File_write_at(fh, offset, &buf[0], len, MPI_CHAR, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 

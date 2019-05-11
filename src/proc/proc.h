@@ -139,7 +139,7 @@ public:
     void MakeStep();
 
     /// I/O
-    void WriteT(string filename);
+    void WriteT(char* filename);
     void WriteStat(string filename);
 
     size_t GetProcAllocMem();

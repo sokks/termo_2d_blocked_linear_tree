@@ -36,8 +36,8 @@ string MpiInfo::toString() {
 
 string Stat::toString() {
     std::ostringstream stringStream;
-    for (auto t: timers) {
-        stringStream << t.first << ": " << t.second.FullDur() << std::endl;
+    for (map<string, MpiTimer>::iterator it = timers.begin(); it != timers.end(); it++) {
+        stringStream << it->first << ": " << it->second.FullDur() << std::endl;
     }
     return stringStream.str();
 }
@@ -95,7 +95,7 @@ int Proc::MPIFinalize() {
     return 0;
 }
 
-int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double)) {
+int Proc::InitMesh(char* offsets_filename, char* blocks_filename, double (*start_func)(double, double)) {
     stat.timers["init_mesh"] = MpiTimer();
     stat.timers["init_mesh"].Start();
 
@@ -104,7 +104,7 @@ int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*sta
     int one_sz = 5 * sizeof(int);
 
     MPI_File fh;
-    MPI_File_open( mpiInfo.comm, offsets_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+    MPI_File_open( mpiInfo.comm, offsets_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
     MPI_File_read_at(fh, 2 * mpiInfo.comm_rank * sizeof(int), range, 2, MPI_INT, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 
@@ -113,7 +113,7 @@ int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*sta
     vector<char> buffer(range[1], 1);
     std::cout << "will read cells file\n";
 
-    MPI_File_open( mpiInfo.comm, blocks_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+    MPI_File_open( mpiInfo.comm, blocks_filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
     MPI_File_read_at(fh, range[0], &buffer[0], range[1], MPI_CHAR, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 
@@ -180,7 +180,7 @@ void Proc::build_fake_ghost_blocks() {
     cout << mpiInfo.comm_rank << " build_fake_ghost_blocks started\n";
 
     // строим списки индексов соседей блоков по процессам
-    fake_blocks_out_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
+    fake_blocks_out_ids = vector<vector<GlobalNumber_t> >(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         GlobalNumber_t blk_num = mesh.blocks[blk_i].idx.get_global_number();
         cout << mpiInfo.comm_rank << " " << blk_num << "  ";
@@ -263,7 +263,7 @@ void Proc::build_fake_ghost_blocks() {
 
     // (1) обмен айдишниками блоков
     // формируем массивы для приема
-    fake_blocks_in_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
+    fake_blocks_in_ids = vector<vector<GlobalNumber_t> >(mpiInfo.comm_size);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         fake_blocks_in_ids[i] = vector<GlobalNumber_t>(in_lens[i]);
     }
@@ -299,7 +299,7 @@ void Proc::build_fake_ghost_blocks() {
 
     // (2) обмен информацией о блоках
     // формируем массивы для отправки
-    vector<vector<int>> data_fake_blocks_out;
+    vector<vector<int> > data_fake_blocks_out;
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         data_fake_blocks_out.push_back(vector<int>());
         for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
@@ -313,7 +313,7 @@ void Proc::build_fake_ghost_blocks() {
     }
     //  cout << "PARAM7\n";
     // формируем массивы для приема
-    vector<vector<int>> data_fake_blocks_in;
+    vector<vector<int> > data_fake_blocks_in;
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         data_fake_blocks_in.push_back(vector<int>(in_lens[i]*3));
     }
@@ -361,14 +361,14 @@ void Proc::build_ghost_cells() {
     // (2) обмен этими нужными ячейками
 
     // обмен длинами
-    blocks_cells_out_lens = vector<vector<int>>(mpiInfo.comm_size);
+    blocks_cells_out_lens = vector<vector<int> >(mpiInfo.comm_size);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         for (int j = 0; j < fake_blocks_out_ids[i].size(); j++) {
             blocks_cells_out_lens[i].push_back(blocks_cells_out_idxs[i][j].size());
         }
     }
 
-    blocks_cells_in_lens = vector<vector<int>>(mpiInfo.comm_size); // длина для каждого процесса -- количсевто блоков от него
+    blocks_cells_in_lens = vector<vector<int> >(mpiInfo.comm_size); // длина для каждого процесса -- количсевто блоков от него
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         blocks_cells_in_lens[i] = vector<int>(fake_blocks_in_ids[i].size());
     }
@@ -455,7 +455,7 @@ void Proc::build_needed_cells_for_blocks_map() {
                 int o = find_owner(neigh_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* neigh_blk = fake_ghost_blocks[neigh_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, neigh_blk, Neigh::DOWN);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, neigh_blk, DOWN);
                     
                     for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                         GlobalNumber_t cc = c_neighs[jjj2];
@@ -475,7 +475,7 @@ void Proc::build_needed_cells_for_blocks_map() {
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::UP);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, UP);
                     for (GlobalNumber_t cc: c_neighs) {
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
@@ -493,7 +493,7 @@ void Proc::build_needed_cells_for_blocks_map() {
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, DOWN);
                     for (GlobalNumber_t cc: c_neighs) {
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
@@ -511,7 +511,7 @@ void Proc::build_needed_cells_for_blocks_map() {
                 int o = find_owner(n_blk_i);
                 if (o != mpiInfo.comm_rank) {
                     BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, Neigh::DOWN);
+                    vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, c_lvl, n_blk, DOWN);
                     for (GlobalNumber_t cc: c_neighs) {
                         if (blocks_cells_out_idxs[o].find(n_blk_i) == blocks_cells_out_idxs[o].end()) {
                             blocks_cells_out_idxs[o][n_blk_i] = vector<GlobalNumber_t>();
@@ -733,7 +733,7 @@ void Proc::MakeStep() {
                     // если нижний блок не у меня
                     if (o != mpiInfo.comm_rank) {
                         BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::DOWN);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
 
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
@@ -753,7 +753,7 @@ void Proc::MakeStep() {
                     // если нижний блок у меня 
                     else {
                         BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::DOWN);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                             GlobalNumber_t cc = c_neighs[jjj2];
@@ -776,7 +776,7 @@ void Proc::MakeStep() {
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, Neigh::DOWN);
+                get_border_cond(&border_cond_type, &cond_func, DOWN);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
                     flows_sum += - Area::a * (cond_func(x-d/2, y, time_step_n * tau) - t0) / (d/2) * l;
@@ -829,7 +829,7 @@ void Proc::MakeStep() {
                     // если верхний блок не у меня
                     if (o != mpiInfo.comm_rank) {
                         BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::UP);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, UP);
 
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
@@ -849,7 +849,7 @@ void Proc::MakeStep() {
                     // если верхний блок у меня 
                     else {
                         BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::UP);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, UP);
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                             GlobalNumber_t cc = c_neighs[jjj2];
@@ -872,7 +872,7 @@ void Proc::MakeStep() {
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, Neigh::UP);
+                get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
                     flows_sum += - Area::a * (cond_func(x+d/2, y, time_step_n * tau) - t0) / (d/2) * l;
@@ -925,7 +925,7 @@ void Proc::MakeStep() {
                     // если блок не у меня
                     if (o != mpiInfo.comm_rank) {
                         BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::LEFT);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, LEFT);
 
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
@@ -945,7 +945,7 @@ void Proc::MakeStep() {
                     // если верхний блок у меня 
                     else {
                         BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::LEFT);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, LEFT);
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                             GlobalNumber_t cc = c_neighs[jjj2];
@@ -968,7 +968,7 @@ void Proc::MakeStep() {
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, Neigh::UP);
+                get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
                     flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
@@ -1021,7 +1021,7 @@ void Proc::MakeStep() {
                     // если блок не у меня
                     if (o != mpiInfo.comm_rank) {
                         BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::RIGHT);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, RIGHT);
 
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
@@ -1041,7 +1041,7 @@ void Proc::MakeStep() {
                     // если блок у меня 
                     else {
                         BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, Neigh::RIGHT);
+                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, RIGHT);
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                             GlobalNumber_t cc = c_neighs[jjj2];
@@ -1064,7 +1064,7 @@ void Proc::MakeStep() {
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, Neigh::UP);
+                get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
                     flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
@@ -1087,13 +1087,13 @@ void Proc::MakeStep() {
 }
 
 void Proc::get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border) {
-    if (border == Neigh::DOWN) {
+    if (border == DOWN) {
         Area::get_border_cond(Area::Border::DOWN, cond_type, cond_func);
-    } else if (border == Neigh::UP) {
+    } else if (border == UP) {
         Area::get_border_cond(Area::Border::UP, cond_type, cond_func);
-    } else if (border == Neigh::RIGHT) {
+    } else if (border == RIGHT) {
         Area::get_border_cond(Area::Border::RIGHT, cond_type, cond_func);
-    } else if (border == Neigh::LEFT) {
+    } else if (border == LEFT) {
         Area::get_border_cond(Area::Border::LEFT, cond_type, cond_func);
     }
 }
@@ -1159,8 +1159,8 @@ void Proc::PrintGhostCells() {
 
 size_t Proc::GetProcAllocMem() {
     size_t res = 0;
-    for (BlockOfCells& b: mesh.blocks) {
-        res += b.GetMemSize();
+    for (int i = 0; i < mesh.blocks.size(); i++) {
+        res += mesh.blocks[i].GetMemSize();
     }
 
     for (int i = 0; i < mpiInfo.comm_size; i++) {

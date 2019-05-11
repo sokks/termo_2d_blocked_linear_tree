@@ -126,7 +126,7 @@ public:
     int MPIFinalize();
 
     /// InitMesh параллельно считывает сетку из файла и инициализирует ячейки
-    int InitMesh(string offsets_filename, string blocks_filename, double (*start_func)(double, double));
+    int InitMesh(char* offsets_filename, char* blocks_filename, double (*start_func)(double, double));
 
     /// BuildGhosts строит структуры для обмена границами
     int BuildGhosts();

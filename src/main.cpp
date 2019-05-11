@@ -41,8 +41,8 @@ int main(int argc, char **argv) {
     int    max_level      = atoi(argv[2]);
     int    base_blk_level = atoi(argv[3]);
     int    max_blk_level  = atoi(argv[4]);
-    string offsets_file   = argv[5];
-    string grid_file      = argv[6];
+    char* offsets_file   = argv[5];
+    char* grid_file      = argv[6];
     int    ts_n           = atoi(argv[7]);
     write_freq            = atoi(argv[8]);
 

@@ -76,7 +76,6 @@ Proc::~Proc() {
 
     cout << mpiInfo.comm_rank << " DESTROYING PROC\n";
 
-    stat.timers["total"].Stop();
     std::cout << mpiInfo.comm_rank << " ";
     std::cout << stat.toString() << std::endl;
 }
@@ -91,6 +90,8 @@ int Proc::MPIInit(int argc, char **argv) {
     return 0;
 }
 int Proc::MPIFinalize() {
+    stat.timers["total"].Stop();
+    
     MPI_Finalize();
     return 0;
 }

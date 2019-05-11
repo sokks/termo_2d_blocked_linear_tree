@@ -1,17 +1,17 @@
 # COMPILER=mpixlC
-# COMPILER=mpicxx
-COMPILER=mpixlcxx
+COMPILER=mpicxx
+# COMPILER=mpixlcxx
 # COMPILER=mpixlcxx_r
 # OPTS=-O0 -std=c++11
 OPTS=-O0
 # OPTS=-O0 -qsmp=omp
 
-BASE_LVL=9
-MAX_LVL=12
+BASE_LVL=7
+MAX_LVL=10
 BASE_BLK_LVL=3
 MAX_BLK_LVL=6
 
-N_PROCS=2
+N_PROCS=16
 N_THREADS=1
 
 TIME_STEPS=2000
@@ -73,7 +73,7 @@ update_txt: data/refine/base_grid.dat bin/translate
 run_mpi: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
-	mpiexec -np $(N_PROCS) bin/test $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+	mpiexec -np $(N_PROCS) --oversubscribe bin/test $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
 
 polus_job_run_mpi: bin/test
 	rm -rf data/temp/*

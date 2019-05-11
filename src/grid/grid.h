@@ -196,6 +196,10 @@ struct BlockOfCells {
         cells_lvl = b.cells_lvl; sz = b.sz; refine_mark = b.refine_mark; 
         refine_marks[0] = b.refine_marks[0]; refine_marks[1] = b.refine_marks[1]; 
         refine_marks[2] = b.refine_marks[2]; refine_marks[3] = b.refine_marks[3];
+        neighs_left_idxs = b.neighs_left_idxs;
+        neighs_right_idxs = b.neighs_right_idxs;
+        neighs_upper_idxs = b.neighs_upper_idxs;
+        neighs_down_idxs = b.neighs_down_idxs;
     }
     BlockOfCells& operator=(const BlockOfCells& b) {
         idx = b.idx; i = b.i;

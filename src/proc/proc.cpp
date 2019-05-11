@@ -102,7 +102,7 @@ int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*sta
 
     MPI_File fh;
     MPI_File_open( mpiInfo.comm, offsets_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
-    MPI_File_read_at(fh, 2 * mpiInfo.comm_rank * sizeof(int), &range, 2, MPI_INT, MPI_STATUS_IGNORE);
+    MPI_File_read_at(fh, 2 * mpiInfo.comm_rank * sizeof(int), range, 2, MPI_INT, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 
     std::cout << mpiInfo.comm_rank << " read range[0]=" << range[0] << " range[1]=" << range[1] << std::endl;
@@ -111,7 +111,7 @@ int Proc::InitMesh(string offsets_filename, string blocks_filename, double (*sta
     std::cout << "will read cells file\n";
 
     MPI_File_open( mpiInfo.comm, blocks_filename.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
-    MPI_File_read_at(fh, range[0], &buffer[0], range[1]-1, MPI_CHAR, MPI_STATUS_IGNORE);
+    MPI_File_read_at(fh, range[0], &buffer[0], range[1], MPI_CHAR, MPI_STATUS_IGNORE);
     MPI_File_close(&fh);
 
     std::cout << "read cells file buffer.size()=" << buffer.size() << std::endl;
@@ -174,9 +174,27 @@ int Proc::BuildGhosts() {
 
 void Proc::build_fake_ghost_blocks() {
 
+    cout << mpiInfo.comm_rank << " build_fake_ghost_blocks started\n";
+
     // строим списки индексов соседей блоков по процессам
     fake_blocks_out_ids = vector<vector<GlobalNumber_t>>(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+        cout << mpiInfo.comm_rank << " " << mesh.blocks[blk_i].idx.get_global_number() << "  ";
+        // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
+                cout << mpiInfo.comm_rank << " L: " << neight_num << " ";
+            }
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
+                cout << mpiInfo.comm_rank << " R: " << neight_num << " ";
+            }
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
+                cout << mpiInfo.comm_rank << " D: " << neight_num << " ";
+            }
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
+                cout << mpiInfo.comm_rank << " U: " << neight_num << " ";
+            }
+            cout << endl;
+        // }
         for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
             int o = find_owner(neight_num);
             if (o != mpiInfo.comm_rank) {
@@ -306,6 +324,8 @@ void Proc::build_fake_ghost_blocks() {
                     fake_blocks_in_ids[i][j]);   // idx
         }
     }
+
+    cout << mpiInfo.comm_rank << " build_fake_ghost_blocks finished\n";
 }
 
 void Proc::build_ghost_cells() {
@@ -490,7 +510,7 @@ int Proc::find_owner(GlobalNumber_t cell_id) {
         }
     }
     
-    // std::cout << "owner not found for cell_id=" << cell_id << std::endl;
+    std::cout << "owner not found for cell_id=" << cell_id << std::endl;
     return -1;
 }
 

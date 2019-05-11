@@ -496,7 +496,8 @@ vector<GlobalNumber_t> TreeIndex::get_all_possible_neighbours_ids() {
     all_neighs_ids.reserve(all_neighs.size());
 
     // cout << "get_all_possible_neighbours_ids(" << lvl << "," << i << "," << j << ")= { ";
-    for (TreeIndex c: all_neighs) {
+    for (int jjj = 0; jjj < all_neighs.size(); jjj++) {
+        TreeIndex c = all_neighs[jjj];
         // cout << "(" << c.lvl << "," << c.i << "," << c.j << "), ";
         all_neighs_ids.push_back(c.get_global_number());
     }
@@ -572,22 +573,22 @@ void Cell::get_spacial_coords(double *x, double *y) {
 
 void Cell::get_border_cond(char *cond_type, double (**cond_func)(double, double, double)) {
     if (is_left_border()) {
-        Area::get_border_cond(Area::Border::LEFT, cond_type, cond_func);
+        Area::get_border_cond(Area::LEFT, cond_type, cond_func);
         return;
     }
 
     if (is_right_border()) {
-        Area::get_border_cond(Area::Border::RIGHT, cond_type, cond_func);
+        Area::get_border_cond(Area::RIGHT, cond_type, cond_func);
         return;
     }
 
     if (is_down_border()) {
-        Area::get_border_cond(Area::Border::DOWN, cond_type, cond_func);
+        Area::get_border_cond(Area::DOWN, cond_type, cond_func);
         return;
     }
 
     if (is_upper_border()) {
-        Area::get_border_cond(Area::Border::UP, cond_type, cond_func);
+        Area::get_border_cond(Area::UP, cond_type, cond_func);
         return;
     }
 
@@ -859,7 +860,7 @@ void BlockedLinearTree::BuildNeighs() {
             // cout << "BN " << i << " h12\n";
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
             // cout << "BN " << i << " h13 idx=" << possible_neigh_idx.get_global_number() << std::endl;
-            if (possible_neigh != nullptr) {
+            if (possible_neigh != NULL) {
                 blocks[i].neighs_left = find_block_children(possible_neigh_idx, RIGHT);
             }
             // cout << "BN " << i << " h14\n";
@@ -869,7 +870,7 @@ void BlockedLinearTree::BuildNeighs() {
         if (!blocks[i].idx.is_right_border()) {
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(RIGHT);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            if (possible_neigh != nullptr) {
+            if (possible_neigh != NULL) {
                 blocks[i].neighs_right = find_block_children(possible_neigh_idx, LEFT);
             }
         }
@@ -878,7 +879,7 @@ void BlockedLinearTree::BuildNeighs() {
         if (!blocks[i].idx.is_upper_border()) {
             TreeIndex possible_neigh_idx = blocks[i].idx.get_face_neighbor(UP);
             BlockOfCells* possible_neigh = find_block(possible_neigh_idx);
-            if (possible_neigh != nullptr) {
+            if (possible_neigh != NULL) {
                 blocks[i].neighs_upper = find_block_children(possible_neigh_idx, DOWN);
             }
         }
@@ -893,7 +894,7 @@ void BlockedLinearTree::BuildNeighs() {
             // if (blocks[i].idx.get_global_number() == GlobalNumber_t(2048)) {
             //     cout << "find(512) = " << possible_neigh << endl;
             // }
-            if (possible_neigh != nullptr) {
+            if (possible_neigh != NULL) {
                 blocks[i].neighs_down = find_block_children(possible_neigh_idx, UP);
             }
         }
@@ -928,7 +929,8 @@ void BlockedLinearTree::BuildNeighs() {
     // cout << "BN " << " h4\n";
     for (int i = 0; i < blocks.size(); i++) {
         // left
-        for (BlockOfCells *b_ptr: blocks[i].neighs_left) {
+        for (int jjj = 0; jjj < blocks[i].neighs_left.size(); jjj++) {
+            BlockOfCells *b_ptr = blocks[i].neighs_left[jjj];
             if(std::find(b_ptr->neighs_right.begin(), b_ptr->neighs_right.end(), &blocks[i]) == b_ptr->neighs_right.end()) {
                 // не делаю сортировку потому что в таком случае должен
                 // быть всего один сосед больший по размеру
@@ -937,21 +939,24 @@ void BlockedLinearTree::BuildNeighs() {
         }
 
         // right
-        for (BlockOfCells *b_ptr: blocks[i].neighs_right) {
+        for (int jjj = 0; jjj < blocks[i].neighs_right.size(); jjj++) {
+            BlockOfCells *b_ptr = blocks[i].neighs_right[jjj];
             if(std::find(b_ptr->neighs_left.begin(), b_ptr->neighs_left.end(), &blocks[i]) == b_ptr->neighs_left.end()) {
                 b_ptr->neighs_left.insert(b_ptr->neighs_left.begin(), &blocks[i]);
             }
         }
 
         // upper
-        for (BlockOfCells *b_ptr: blocks[i].neighs_upper) {
+        for (int jjj = 0; jjj < blocks[i].neighs_upper.size(); jjj++) {
+            BlockOfCells *b_ptr = blocks[i].neighs_upper[jjj];
             if(std::find(b_ptr->neighs_down.begin(), b_ptr->neighs_down.end(), &blocks[i]) == b_ptr->neighs_down.end()) {
                 b_ptr->neighs_down.insert(b_ptr->neighs_down.begin(), &blocks[i]);
             }
         }
 
         // down
-        for (BlockOfCells *b_ptr: blocks[i].neighs_down) {
+        for (int jjj = 0; jjj < blocks[i].neighs_neighs_downupper.size(); jjj++) {
+            BlockOfCells *b_ptr = blocks[i].neighs_down[jjj];
             if(std::find(b_ptr->neighs_upper.begin(), b_ptr->neighs_upper.end(), &blocks[i]) == b_ptr->neighs_upper.end()) {
                 b_ptr->neighs_upper.insert(b_ptr->neighs_upper.begin(), &blocks[i]);
             }
@@ -1004,7 +1009,7 @@ BlockOfCells* BlockedLinearTree::find_block(TreeIndex target) {
             right = midi;
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
@@ -1027,7 +1032,7 @@ BlockOfCells* BlockedLinearTree::find_block(GlobalNumber_t target) {
             right = midi;
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, Neigh n) {
@@ -1074,7 +1079,7 @@ vector<BlockOfCells*> BlockedLinearTree::find_block_children(TreeIndex target, N
             GlobalNumber_t t1 = cur_idx.get_child(ch1).get_global_number();
             GlobalNumber_t t2 = cur_idx.get_child(ch2).get_global_number();
 
-            BlockOfCells *b1 = nullptr, *b2 = nullptr;
+            BlockOfCells *b1 = NULL, *b2 = NULL;
             b1 = find_block(t1);
             b2 = find_block(t2);
 
@@ -1220,7 +1225,7 @@ vector<char> BlockedLinearTree::GenWriteStruct(char light) {
 }
 
 SimpleCell *BlockOfCells::find_border_cell_by_global_idx(GlobalNumber_t target) {
-    SimpleCell *res = nullptr;
+    SimpleCell *res = NULL;
 
     GlobalNumber_t mask(-1);
     mask = mask << 2*(max_lvl - max_blk_lvl);
@@ -1230,7 +1235,7 @@ SimpleCell *BlockOfCells::find_border_cell_by_global_idx(GlobalNumber_t target) 
     idx = idx >> (2*(max_lvl - cells_lvl));
     if ((idx > sz*sz) || (idx < 0)) {
         cout << "[ERROR] idx out of bounds\n";
-        return nullptr;
+        return NULL;
     }
 
     return &cells[idx];
@@ -1272,8 +1277,8 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
     }
 
     vector<GlobalNumber_t> res;
-    for (TreeIndex& n_idx: neighs) {
-        GlobalNumber_t n = n_idx.get_global_number();
+    for (int jjj = 0; jjj < neighs.size(); jjj++) {
+        GlobalNumber_t n = neighs[jjj].get_global_number();
         if (check_cell_owner(blk->idx.get_global_number(), n)) {
             res.push_back(n);
         }
@@ -1289,7 +1294,7 @@ void BlockedLinearTree::WriteBlocks(string filename) {
     int len = buf.size();
     cout << "WriteBlocks len=" << len << endl;
 
-    std::ofstream fout(filename, std::ios::out | std::ios::binary);
+    std::ofstream fout(filename.c_str(), std::ios::out | std::ios::binary);
     fout.write(&buf[0], len);
     fout.close();
 }

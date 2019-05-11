@@ -23,14 +23,14 @@ int main(int argc, char **argv) {
     }
     GridInit(base_level, max_level, base_blk_level, max_blk_level);
 
-    std::cout << "hello 1\n";
+    // std::cout << "hello 1\n";
     BlockedLinearTree grid(&Area::T0);
     while (grid.MarkToRefine()) {
-        std::cout << "hello 2\n";
+        // std::cout << "hello 2\n";
         grid.RefineBlocks();
         grid.RefineCells();
     }
-    std::cout << "hello\n";
+    // std::cout << "hello\n";
     grid.BuildNeighs();
 
     grid.Decompose(n_procs);

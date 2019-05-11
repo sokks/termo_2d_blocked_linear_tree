@@ -608,6 +608,7 @@ BlockOfCells::BlockOfCells(int _cells_lvl, int _blk_lvl, int _sz, GlobalNumber_t
         cells_lvl(_cells_lvl), i(_i), idx(_blk_lvl, _i), sz(_sz) {
             // cout << "BlockOfCells(" << _cells_lvl << "," << _blk_lvl << "," << _sz << "," << _i << ")\n";
             refine_marks[0] = 0; refine_marks[1] = 0; refine_marks[2] = 0; refine_marks[3] = 0;
+            refine_mark=0;
         }
 
 void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {

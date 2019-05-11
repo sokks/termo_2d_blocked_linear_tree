@@ -97,13 +97,13 @@ struct TreeIndex {
 double dist(double x1, double y1, double x2, double y2);
 
 struct Cell: public TreeIndex {
-    char refine_mark = 0;
+    char refine_mark;
     double temp[2]; // for cur and next
 
-    Cell() {}
-    Cell(int _lvl, GlobalNumber_t globalNumber): TreeIndex(_lvl, globalNumber) {}
-    Cell(int _lvl, int _i, int _j): TreeIndex(_lvl, _i, _j) {}
-    Cell(TreeIndex ci, double _temp): TreeIndex(ci) { temp[0] = _temp; temp[1] = 0.0; }
+    Cell() { refine_mark=0; }
+    Cell(int _lvl, GlobalNumber_t globalNumber): TreeIndex(_lvl, globalNumber) {refine_mark=0;}
+    Cell(int _lvl, int _i, int _j): TreeIndex(_lvl, _i, _j) {refine_mark=0;}
+    Cell(TreeIndex ci, double _temp): TreeIndex(ci) { temp[0] = _temp; temp[1] = 0.0; refine_mark=0; }
     Cell(const Cell& c): TreeIndex(c.lvl, c.i, c.j) { temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; }
     Cell& operator=(const Cell& c) { lvl = c.lvl; i = c.i; j = c.j; temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; return *this; }
 
@@ -134,10 +134,10 @@ double get_lvl_dx(int lvl);
 
 struct SimpleCell {
     double temp[2];
-    char refine_mark = 0;
+    char refine_mark;
 
-    SimpleCell() {}
-    SimpleCell(int t) { temp[0] = t; temp[1] = t; }
+    SimpleCell() {refine_mark=0;}
+    SimpleCell(int t) { temp[0] = t; temp[1] = t; refine_mark=0; }
     SimpleCell(const SimpleCell& c) { temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark; }
     SimpleCell& operator=(const SimpleCell& c) {
         temp[0] = c.temp[0]; temp[1] = c.temp[1]; refine_mark = c.refine_mark;
@@ -155,7 +155,7 @@ struct BlockOfCells {
 
     int cells_lvl;
     int sz;
-    int refine_mark = 0;
+    int refine_mark;
     int refine_marks[4];
 
     vector<BlockOfCells*> neighs_left;
@@ -189,6 +189,7 @@ struct BlockOfCells {
         refine_marks[1] = 0;
         refine_marks[2] = 0;
         refine_marks[3] = 0;
+        refine_mark=0;
     }
     BlockOfCells(const BlockOfCells& b) {
         idx = b.idx; i = b.i;

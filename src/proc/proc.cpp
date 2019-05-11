@@ -67,6 +67,8 @@ Proc::Proc() {
     stat.timers["sort_neighs"] = MpiTimer();
     stat.timers["compute_temps"] = MpiTimer();
     stat.timers["compute_temps_border"] = MpiTimer();
+
+    time_step_n = 0;
 }
 
 Proc::~Proc() {

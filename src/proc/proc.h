@@ -8,7 +8,7 @@
 #include <unistd.h>
 // #include <omp.h>
 
-#include "../area/area.h"
+// #include "../area/area.h"
 #include "../grid/grid.h"
 
 using std::vector;
@@ -26,9 +26,10 @@ void SolverInit(int ts_n);
 
 class MpiTimer {
     double s_time;
-    double dur = 0;
+    double dur;
 
 public:
+    MpiTimer() { dur = 0; }
     void   Start() { s_time = MPI_Wtime(); }
     double Stop() { double cur_dur = MPI_Wtime() - s_time; dur += cur_dur; return cur_dur; }
     double FullDur() { return dur; }
@@ -63,11 +64,12 @@ struct MetaInfo {
 
 struct FullMeta {
     vector<GlobalNumber_t> metas;
-    int one_meta_len = sizeof(GlobalNumber_t) * 3;
+    int one_meta_len;
 
-    FullMeta(){}
+    FullMeta(){one_meta_len = sizeof(GlobalNumber_t) * 3;}
 
     FullMeta(MetaInfo my_meta, int n_procs, int my_rank) {
+        one_meta_len = sizeof(GlobalNumber_t) * 3;
         metas = vector<GlobalNumber_t>(n_procs * 3);
         metas[my_rank*3]   = my_meta.procStart;
         metas[my_rank*3+1] = my_meta.procEnd;

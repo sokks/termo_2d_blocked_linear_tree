@@ -1,5 +1,6 @@
 # COMPILER=mpixlC
-COMPILER=mpicxx
+# COMPILER=mpicxx
+COMPILER=mpixlcxx
 # COMPILER=mpixlcxx_r
 OPTS=-O0
 # OPTS=-O0 -qsmp=omp

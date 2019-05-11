@@ -102,8 +102,8 @@ class Proc {
     vector<map<GlobalNumber_t, vector<GlobalNumber_t > > > blocks_cells_in_idxs;  // []map[blk_idx][]blk_cells (первая размерность - ранг процессора)
     vector<map<GlobalNumber_t, vector<GlobalNumber_t > > > blocks_cells_out_idxs;
 
-    vector<vector<int>> blocks_cells_out_lens;       // длины массивов айдишников исходящих ячеек по процессам
-    vector<vector<int>> blocks_cells_in_lens;        // длины массивов айдишников входящих блоков по процессам
+    vector<vector<int> > blocks_cells_out_lens;       // длины массивов айдишников исходящих ячеек по процессам
+    vector<vector<int> > blocks_cells_in_lens;        // длины массивов айдишников входящих блоков по процессам
     vector<vector<GlobalNumber_t > > cells_out_idxs; // айдишники исходящих ячеек по процессам
     vector<vector<GlobalNumber_t > > cells_in_idxs;  // айдишники входящих ячеек по процессам
     vector<vector<double> > cells_out_idxs_temps;    // соответствующие исходящие температуры

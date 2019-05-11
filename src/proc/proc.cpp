@@ -221,6 +221,8 @@ void Proc::build_fake_ghost_blocks() {
         }
     }
 
+    cout << "PARAM1\n";
+
     // сортируем и удаляем повторения
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         std::sort(fake_blocks_out_ids[i].begin(), fake_blocks_out_ids[i].end());
@@ -247,13 +249,13 @@ void Proc::build_fake_ghost_blocks() {
     recv_reqs = vector<MPI_Request>(active_neighs_num);
     recv_statuses = vector<MPI_Status>(active_neighs_num);
 
-
+ cout << "PARAM2\n";
     // обмениваемся длинами чтобы знать сколько блоков от кого принимать
     vector<int> in_lens(mpiInfo.comm_size, 0);
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         MPI_Gather(&out_lens[i], 1, MPI_INT, &in_lens[0], 1, MPI_INT, i, mpiInfo.comm);
     }
-
+ cout << "PARAM3\n";
 
     // (1) обмен айдишниками блоков
     // формируем массивы для приема
@@ -261,7 +263,7 @@ void Proc::build_fake_ghost_blocks() {
     for (int i = 0; i < mpiInfo.comm_size; i++) {
         fake_blocks_in_ids[i] = vector<GlobalNumber_t>(in_lens[i]);
     }
-
+ cout << "PARAM4\n";
     // отправляем и принимаем
     int req_num = 0;
     for (int n = 0; n < mpiInfo.comm_size; n++) {
@@ -270,12 +272,14 @@ void Proc::build_fake_ghost_blocks() {
             req_num++;
         }
     }
+     cout << "PARAM5\n";
     for (int n = 0; n < mpiInfo.comm_size; n++) {
         if ( (n != mpiInfo.comm_rank) && (in_lens[n] > 0) ) {
             MPI_Status status;
             MPI_Recv(&fake_blocks_in_ids[n][0], in_lens[n], MPI_LONG_LONG_INT, n, MPI_ANY_TAG, mpiInfo.comm, &status);
         }
     }
+     cout << "PARAM6\n";
     MPI_Waitall(active_neighs_num, &send_reqs[0], &send_statuses[0]);
 
 
@@ -291,6 +295,7 @@ void Proc::build_fake_ghost_blocks() {
             data_fake_blocks_out[i].push_back(blk->sz);
         }
     }
+     cout << "PARAM7\n";
     // формируем массивы для приема
     vector<vector<int>> data_fake_blocks_in;
     for (int i = 0; i < mpiInfo.comm_size; i++) {

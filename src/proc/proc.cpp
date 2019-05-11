@@ -183,6 +183,24 @@ void Proc::build_fake_ghost_blocks() {
                 fake_blocks_out_ids[o].push_back(neight_num);
             }
         }
+        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
+            int o = find_owner(neight_num);
+            if (o != mpiInfo.comm_rank) {
+                fake_blocks_out_ids[o].push_back(neight_num);
+            }
+        }
+        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
+            int o = find_owner(neight_num);
+            if (o != mpiInfo.comm_rank) {
+                fake_blocks_out_ids[o].push_back(neight_num);
+            }
+        }
+        for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
+            int o = find_owner(neight_num);
+            if (o != mpiInfo.comm_rank) {
+                fake_blocks_out_ids[o].push_back(neight_num);
+            }
+        }
     }
 
     // сортируем и удаляем повторения

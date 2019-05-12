@@ -82,7 +82,8 @@ Proc::~Proc() {
 
 int Proc::MPIInit(int argc, char **argv) {
     // MPI_Init(&argc, &argv);
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED);
+    int provided;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
     mpiInfo.comm = MPI_COMM_WORLD;
     MPI_Comm_rank(MPI_COMM_WORLD, &mpiInfo.comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpiInfo.comm_size);

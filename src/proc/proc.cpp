@@ -88,7 +88,7 @@ int Proc::MPIInit(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &mpiInfo.comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpiInfo.comm_size);
 
-    cout << mpiInfo.comm_rank << " N_THREADS=" << omp_get_num_threads() << endl;
+    // cout << mpiInfo.comm_rank << " N_THREADS=" << omp_get_num_threads() << endl;
 
     stat.timers["total"].Start();
     return 0;

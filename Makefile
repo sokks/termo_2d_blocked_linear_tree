@@ -98,7 +98,7 @@ bg_job_run_mpi_omp: bin/test
 
 bin/test: build/main.o build/area.o build/grid.o build/proc.o Makefile
 	mkdir -p bin
-	$(COMPILER) -o $@ build/main.o build/area.o build/grid.o build/proc.o
+	$(COMPILER) $(OPTS) -o $@ build/main.o build/area.o build/grid.o build/proc.o
 
 build/main.o: src/main.cpp Makefile
 	mkdir -p build

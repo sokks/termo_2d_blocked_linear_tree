@@ -96,25 +96,25 @@ bg_job_run_mpi_omp: bin/test
 	mpisubmit.bg -n $(N_PROCS) -m smp -w 00:30:00 bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
 
 
-bin/test: build/main.o build/area.o build/grid.o build/proc.o Makefile
+bin/test: build/main.o build/area.o build/grid.o build/proc.o
 	mkdir -p bin
 	$(COMPILER) $(OPTS) -o $@ build/main.o build/area.o build/grid.o build/proc.o
 
-build/main.o: src/main.cpp Makefile
+build/main.o: src/main.cpp
 	mkdir -p build
 	$(COMPILER) $(OPTS) -o $@ -c src/main.cpp
 
 
-bin/gen_grid: build/gen_grid.o build/grid.o build/area.o Makefile
+bin/gen_grid: build/gen_grid.o build/grid.o build/area.o
 	mkdir -p bin
 	$(COMPILER) $(OPTS) -o $@ build/gen_grid.o build/grid.o build/area.o
 
-build/gen_grid.o: src/gen_grid.cpp Makefile
+build/gen_grid.o: src/gen_grid.cpp
 	mkdir -p build
 	$(COMPILER) $(OPTS) -o $@ -c src/gen_grid.cpp
 
 
-bin/translate: build/translate.o Makefile
+bin/translate: build/translate.o
 	$(COMPILER) $(OPTS) -o $@ build/translate.o
 
 build/translate.o: src/translate.cpp Makefile
@@ -122,15 +122,15 @@ build/translate.o: src/translate.cpp Makefile
 	$(COMPILER) $(OPTS) -o $@ -c src/translate.cpp
 
 
-build/grid.o: src/grid/grid.h src/grid/grid.cpp Makefile
+build/grid.o: src/grid/grid.h src/grid/grid.cpp
 	mkdir -p build
 	$(COMPILER) $(OPTS) -o $@ -c src/grid/grid.cpp 
 
-build/proc.o: src/proc/proc.h src/proc/proc.cpp Makefile
+build/proc.o: src/proc/proc.h src/proc/proc.cpp
 	mkdir -p build
 	$(COMPILER) $(OPTS) -o $@ -c src/proc/proc.cpp 
 
-build/area.o: src/area/area.h src/area/area.cpp Makefile
+build/area.o: src/area/area.h src/area/area.cpp
 	mkdir -p build
 	$(COMPILER) $(OPTS) -o $@ -c src/area/area.cpp
 

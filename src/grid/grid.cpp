@@ -1127,17 +1127,18 @@ void BlockedLinearTree::Decompose(int n_procs) {
     int optimal_weight = sum_weight / n_procs;
     cout << "OPTIMAL_WEIGHT=" << optimal_weight << endl;
     
-    cout << "WEIGHTS = [ ";
-
     int max_weight = 0;
     int max_weight_proc = -1;
     int cur_weight = 0;
     int proc_i = 0;
+
+    vector<int> weights(n_procs, 0);
+
     for (int i = 0; i < blocks.size(); i++) {
         proc_blocks[i] = proc_i;
         cur_weight += blocks[i].GetNOfCells();
+        weights[proc_i] += blocks[i].GetNOfCells();
         if (cur_weight >= optimal_weight) {
-            cout << cur_weight << " ";
             if (cur_weight > max_weight) {
                 max_weight = cur_weight;
                 max_weight_proc = proc_i;
@@ -1146,7 +1147,12 @@ void BlockedLinearTree::Decompose(int n_procs) {
             cur_weight = 0;
         }
     }
-    cout << endl;
+
+    cout << "WEIGHTS = [ ";
+    for (int i = 0; i < n_procs; i++) {
+        cout << weights[i] << " ";
+    }
+    cout << "]" << endl;
 
     // for (int i = 0; i < proc_blocks.size(); i++) {
     //     cout << proc_blocks[i] << " ";

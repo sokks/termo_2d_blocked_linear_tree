@@ -1,10 +1,10 @@
 # COMPILER=mpixlC
 # COMPILER=mpicxx
-COMPILER=mpixlcxx
-# COMPILER=mpixlcxx_r
+# COMPILER=mpixlcxx
+COMPILER=mpixlcxx_r
 # OPTS=-O0 -std=c++11
-OPTS=-O0
-# OPTS=-O0 -qsmp=omp
+# OPTS=-O0
+OPTS=-O0 -qsmp=omp
 
 BASE_LVL=9
 MAX_LVL=12

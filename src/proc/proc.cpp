@@ -81,10 +81,13 @@ Proc::~Proc() {
 }
 
 int Proc::MPIInit(int argc, char **argv) {
-    MPI_Init(&argc, &argv);
+    // MPI_Init(&argc, &argv);
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED);
     mpiInfo.comm = MPI_COMM_WORLD;
     MPI_Comm_rank(MPI_COMM_WORLD, &mpiInfo.comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpiInfo.comm_size);
+
+    cout << mpiInfo.comm_rank << " N_THREADS=" << omp_get_num_threads() << endl;
 
     stat.timers["total"].Start();
     return 0;
@@ -656,8 +659,9 @@ void Proc::MakeStep() {
     int blk_i, i, j;
 
     // внутренние ячейки блока
-    // # pragma omp parallel
-    // # pragma omp for private(blk_i, i, j)
+    # pragma omp parallel
+    cout << "proc " << mpiInfo.comm_rank << " thread " << omp_get_thread_num() << endl;
+    # pragma omp for private(blk_i, i, j)
     for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
 
         double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);

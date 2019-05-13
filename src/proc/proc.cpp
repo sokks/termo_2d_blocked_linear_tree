@@ -661,6 +661,7 @@ void Proc::MakeStep() {
 
     // внутренние ячейки блока
     # pragma omp parallel
+    {
     cout << "proc " << mpiInfo.comm_rank << " thread " << omp_get_thread_num() << endl;
     # pragma omp for private(blk_i, i, j)
     for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
@@ -694,7 +695,7 @@ void Proc::MakeStep() {
             }
         }
     }
-
+    }
     stat.timers["compute_temps"].Stop();
 
     StopExchangeGhosts();

@@ -1,10 +1,12 @@
 # COMPILER=mpixlC
 # COMPILER=mpicxx
 # COMPILER=mpixlcxx
-COMPILER=mpixlcxx_r
+# COMPILER=mpixlcxx_r
+COMPILER=xlc++_r
 # OPTS=-O0 -std=c++11
 # OPTS=-O0
 OPTS=-O0 -qsmp=omp
+RUN_OPTS=-m vn -env BG_MAXALIGNEXP=-1 -w 00:30:00
 
 BASE_LVL=9
 MAX_LVL=12
@@ -93,7 +95,7 @@ bg_job_run_mpi: bin/test
 bg_job_run_mpi_omp: bin/test
 	rm -rf data/temp/*
 	mkdir -p data/temp
-	mpisubmit.bg -n $(N_PROCS) -m smp -w 00:30:00 bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
+	mpisubmit.bg -n $(N_PROCS) $(RUN_OPTS) bin/test -- $(BASE_LVL) $(MAX_LVL) $(BASE_BLK_LVL) $(MAX_BLK_LVL) data/refine/offsets_$(N_PROCS).dat data/refine/base_grid_blocks.dat $(TIME_STEPS) $(WRITE_FREQ)
 
 
 bin/test: build/main.o build/area.o build/grid.o build/proc.o

@@ -1,20 +1,20 @@
 # COMPILER=mpixlC
-# COMPILER=mpicxx
+COMPILER=mpicxx
 # COMPILER=mpixlcxx
 # COMPILER=mpixlcxx_r
-COMPILER=xlc++_r
-# OPTS=-O0 -std=c++11
+# COMPILER=xlc++_r
+OPTS=-O0 -std=c++11
 # OPTS=-O0
-OPTS=-O0 -qsmp=omp
+# OPTS=-O0 -qsmp=omp
 RUN_OPTS=-m vn -env BG_MAXALIGNEXP=-1 -w 00:30:00
 
 BASE_LVL=9
 MAX_LVL=12
-BASE_BLK_LVL=5
-MAX_BLK_LVL=8
+BASE_BLK_LVL=3
+MAX_BLK_LVL=6
 
-N_PROCS=8
-N_THREADS=1
+N_PROCS=16
+N_THREADS=4
 
 TIME_STEPS=1000
 WRITE_FREQ=200
@@ -53,7 +53,7 @@ vis_base_grid: update_txt
 	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/grid_levels_$(BASE_LVL).png Greys lvls
 	
 vis_decomposition: update_txt
-	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/grid_decomposition_$(BASE_LVL)_$(N_PROCS).png tab10 procs $(N_PROCS)
+	python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/grid_decomposition_$(BASE_LVL)_$(N_PROCS).png tab20 procs $(N_PROCS)
 
 vis_temps: translate
 	# python3 vis_2d_nonuniform.py $(MAX_LVL) data/refine/base_grid.txt data/pics/start_temp.png coolwarm temp

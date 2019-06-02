@@ -661,6 +661,7 @@ void Proc::MakeStep() {
 
     // внутренние ячейки блока
     # pragma omp parallel
+    {
     cout << "proc " << mpiInfo.comm_rank << " thread " << omp_get_thread_num() << endl;
     # pragma omp for private(blk_i, i, j)
     for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
@@ -694,7 +695,7 @@ void Proc::MakeStep() {
             }
         }
     }
-
+    }
     stat.timers["compute_temps"].Stop();
 
     StopExchangeGhosts();
@@ -1171,12 +1172,12 @@ void Proc::PrintMyBlocks() {
     int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
     int cur_temp_idx = temp_l_corr;
 
-    cout << mpiInfo.comm_rank << " CELLS={ ";
-    for (int i = 0; i < mesh.blocks.size(); i++) {
-        cout << "(" << mesh.blocks[i].idx.lvl << "," << mesh.blocks[i].idx.i << "," << mesh.blocks[i].idx.j <<
-              mesh.blocks[i].cells_lvl << ", " << mesh.blocks[i].sz << ") ";
-    }
-    cout << "}\n";
+    // cout << mpiInfo.comm_rank << " CELLS={ ";
+    // for (int i = 0; i < mesh.blocks.size(); i++) {
+    //     cout << "(" << mesh.blocks[i].idx.lvl << "," << mesh.blocks[i].idx.i << "," << mesh.blocks[i].idx.j <<
+    //           mesh.blocks[i].cells_lvl << ", " << mesh.blocks[i].sz << ") ";
+    // }
+    // cout << "}\n";
 }
 
 void Proc::PrintGhostCells() {

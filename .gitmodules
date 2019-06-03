@@ -1,0 +1,3 @@
+[submodule "termo_2d_linear_tree"]
+	path = termo_2d_linear_tree
+	url = git@github.com:sokks/termo_2d_linear_tree.git

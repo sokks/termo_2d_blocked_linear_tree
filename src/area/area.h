@@ -23,6 +23,7 @@ namespace Area {
     double BorderCond1(double x, double y, double t);
     double BorderCond2(double x, double y, double t);
     double BorderCond3(double x, double y, double t);
+    double BorderCondFixed1(double x, double y, double t);
     double Q(double x, double y, double t);
 
     enum Border { LEFT, RIGHT, UP, DOWN };

@@ -29,25 +29,28 @@ double Area::T0(double x, double y) {
 }
 
 int Area::Refine1(double x, double y) {
-    double r = 0.24;
-    double c_x = 0.25;
-    double c_y = 0.25;
-    // if ( (x-c_x) * (x-c_x) + (y-c_y) * (y-c_y) < r*r ) { //,0078125 < 0,09
-    if ( (fabs(x-c_x) < r) && (fabs(y - c_y) < r) ) {
-        return 1;
-    }
-    return 0.0;
+    // double r = 0.24;
+    // double c_x = 0.25;
+    // double c_y = 0.25;
+    // // if ( (x-c_x) * (x-c_x) + (y-c_y) * (y-c_y) < r*r ) { //,0078125 < 0,09
+    // if ( (fabs(x-c_x) < r) && (fabs(y - c_y) < r) ) {
+    //     return 1;
+    // }
+
+    return (x < (x_start + (x_end - x_start) / 2)) && (y < (y_start + (y_end - y_start) / 2) );
 }
 
 int Area::Refine2(double x, double y) {
-    double r = 0.11;
-    double c_x = 0.25;
-    double c_y = 0.25;
-    // if ( (x-c_x) * (x-c_x) + (y-c_y) * (y-c_y) < r*r ) { //,0078125 < 0,09
-    if ( (fabs(x-c_x) < r) && (fabs(y - c_y) < r) ) {
-        return 1;
-    }
-    return 0.0;
+    // double r = 0.11;
+    // double c_x = 0.25;
+    // double c_y = 0.25;
+    // // if ( (x-c_x) * (x-c_x) + (y-c_y) * (y-c_y) < r*r ) { //,0078125 < 0,09
+    // if ( (fabs(x-c_x) < r) && (fabs(y - c_y) < r) ) {
+    //     return 1;
+    // }
+    // return 0.0;
+
+    return (x < (x_start + (x_end - x_start) / 4)) && (y < (y_start + (y_end - y_start) / 4) );
 }
 
 int Area::Refine3(double x, double y) {
@@ -73,6 +76,10 @@ double Area::BorderCond3(double x, double y, double t) { // up
     return 100 * t;
 }
 
+double Area::BorderCondFixed1(double x, double y, double t) { // up
+    return 1;
+}
+
 void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(double, double, double)) {
 
     switch (b) {
@@ -85,7 +92,8 @@ void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(doubl
             // *cond_type = 2;
             // *cond_func = &BorderCond2;
             *cond_type = 1;
-            *cond_func = &BorderCond1;
+            // *cond_func = &BorderCond1;
+            *cond_func = &BorderCondFixed1;
             break;
         }
         case UP: {

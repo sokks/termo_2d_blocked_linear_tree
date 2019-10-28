@@ -21,11 +21,12 @@ double Area::T0(double x, double y) {
     // if ( (x-c_x) * (x-c_x) + (y-c_y) * (y-c_y) < r*r ) { //,0078125 < 0,09
     //     return 10;
     // }
-    double sigma_x = 0.05;
-    double sigma_y = 0.05;
-    double mean_x = 0.25;
-    double mean_y = 0.25;
-    return 0.05 * (1.0 / (sigma_x * sigma_y)) * exp( - ((x - mean_x)*(x - mean_x))/(2*sigma_x*sigma_x) - ((y - mean_y)*(y - mean_y))/(2*sigma_y*sigma_y) );
+    // double sigma_x = 0.05;
+    // double sigma_y = 0.05;
+    // double mean_x = 0.25;
+    // double mean_y = 0.25;
+    // return 0.05 * (1.0 / (sigma_x * sigma_y)) * exp( - ((x - mean_x)*(x - mean_x))/(2*sigma_x*sigma_x) - ((y - mean_y)*(y - mean_y))/(2*sigma_y*sigma_y) );
+    return 0.0;
 }
 
 int Area::Refine1(double x, double y) {
@@ -113,25 +114,30 @@ void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(doubl
 
 
 
+// источник тепла
 double Area::Q(double x, double y, double t) {
-    if (t > 0.2) {
-        return 0;
-    }
-    double eps = 0.1;
+    // if (t > 0.2) {
+    //     return 0;
+    // }
+    // double eps = 0.1;
 
-    double r = 0.05;
-    double c_x = 0.25;
-    double c_y = 0.25;
+    // double r = 0.05;
+    // double c_x = 0.25;
+    // double c_y = 0.25;
 
-    // if ((fabs(x - 0.45) < eps) && (fabs(y - 0.5) < eps)) {
+    // // if ((fabs(x - 0.45) < eps) && (fabs(y - 0.5) < eps)) {
+    // //     return 0.01;
+    // // }
+    // // if ((fabs(x - 0.55) < eps) && (fabs(y - 0.5) < eps)) {
+    // //     return 0.01;
+    // // }
+
+    // if ((fabs(x - c_x) < eps ) && (fabs(y - c_y) < eps)) {
     //     return 0.01;
     // }
-    // if ((fabs(x - 0.55) < eps) && (fabs(y - 0.5) < eps)) {
-    //     return 0.01;
-    // }
 
-    if ((fabs(x - c_x) < eps ) && (fabs(y - c_y) < eps)) {
-        return 0.01;
+    if ( (x < x_end / 1000) && (y < y_end / 1000) ) {
+        return 1.0;
     }
 
     return 0;

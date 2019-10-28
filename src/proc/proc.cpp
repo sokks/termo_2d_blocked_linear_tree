@@ -2,6 +2,8 @@
 
 #define FULL_DEBUG 0
 
+#define USE_SIMPLE_FLOWS 1
+
 using std::vector;
 using std::map;
 using std::string;
@@ -673,17 +675,25 @@ void Proc::MakeStep() {
 
         for (i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
             for (j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
-                double flows_sum = 0;
+                double flows_sum = 0.0;
+                int n_neighs = 4;
                 double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
 
-                double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
-                flows_sum += - Area::a * (t1 - t0) / d * l;
+                if (USE_SIMPLE_FLOWS) {
+                    flows_sum += mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
+                    flows_sum += mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
+                    flows_sum += mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
+                    flows_sum += mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
+                } else {
+                    double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
+                    flows_sum += - Area::a * (t1 - t0) / d * l;
+                    t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
+                    flows_sum += - Area::a * (t1 - t0) / d * l;
+                    t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
+                    flows_sum += - Area::a * (t1 - t0) / d * l;
+                    t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
+                    flows_sum += - Area::a * (t1 - t0) / d * l;
+                }
 
                 double x, y;
                 mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
@@ -691,7 +701,12 @@ void Proc::MakeStep() {
                 
                 // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
 
-                mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+                if (USE_SIMPLE_FLOWS) {
+                    // просто среднее значение соседних ячеек + предыдущее значение в этой + источник
+                    mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+                } else {
+                    mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+                }
             }
         }
     }
@@ -714,7 +729,6 @@ void Proc::MakeStep() {
 
         // bottom border
 {
-        double border_flow = 0.0;
         bool b = 0;
         if (blk.neighs_down_idxs.size() == 0) {
             b = 1;
@@ -723,19 +737,30 @@ void Proc::MakeStep() {
         // проход по ячейкам нижней границы блока
         int i = 0;
         for (int j = 1; j < blk.sz-1; j++) {
+            
             double flows_sum = 0.0;
+            int n_neighs = 0;
+
             double t0 = blk.cells[0*sz+j].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            double t1 = blk.cells[0*sz+(j-1)].temp[cur_temp_idx]; // левая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[0*sz+(j+1)].temp[cur_temp_idx]; // правая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[1*sz+j].temp[cur_temp_idx]; // верхняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-
+            
             double x, y;
             blk.get_spacial_coords(i, j, &x, &y);
+
+
+            // три соседних ячейки внутри этого же блока
+            if (USE_SIMPLE_FLOWS) {
+                flows_sum += blk.cells[0*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += blk.cells[0*sz+(j+1)].temp[cur_temp_idx]; // правая
+                flows_sum += blk.cells[1*sz+j].temp[cur_temp_idx]; // верхняя
+                n_neighs += 3;
+            } else {
+                double t1 = blk.cells[0*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[0*sz+(j+1)].temp[cur_temp_idx]; // правая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[1*sz+j].temp[cur_temp_idx]; // верхняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+            }
             
             // если снизу есть блоки
             if (b != 1) {
@@ -762,7 +787,12 @@ void Proc::MakeStep() {
                                     if (n_blk->cells_lvl > blk.cells_lvl) {
                                         l = l / 2;
                                     }
-                                    outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    if (USE_SIMPLE_FLOWS) {
+                                        outer_flow += cells_in_idxs_temps[o][k];
+                                        n_neighs++;
+                                    } else {
+                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    }
                                 }
                             }
                         }
@@ -780,7 +810,12 @@ void Proc::MakeStep() {
                             if (n_blk->cells_lvl > blk.cells_lvl) {
                                 l = l / 2;
                             }
-                            outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            if (USE_SIMPLE_FLOWS) {
+                                outer_flow += c->temp[cur_temp_idx];
+                                n_neighs++;
+                            } else {
+                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            }
                         }
                     }
                 }
@@ -796,20 +831,28 @@ void Proc::MakeStep() {
                 get_border_cond(&border_cond_type, &cond_func, DOWN);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
-                    flows_sum += - Area::a * (cond_func(x-d/2, y, time_step_n * tau) - t0) / (d/2) * l;
-                } else if (border_cond_type == 2) {
-                    flows_sum += cond_func(x-d/2, y, time_step_n * tau);
-                }
+                    if (USE_SIMPLE_FLOWS) {
+                        flows_sum += cond_func(x-d/2, y, time_step_n * tau);
+                        n_neighs++;
+                    } else {
+                        flows_sum += - Area::a * (cond_func(x-d/2, y, time_step_n * tau) - t0) / (d/2) * l;
+                    }
+                } //else if (border_cond_type == 2) {
+                //     flows_sum += cond_func(x-d/2, y, time_step_n * tau);
+                // }
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
-            mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            if (USE_SIMPLE_FLOWS) {
+                mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+            } else {
+                mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            }
         }
 }
 
         // upper border
 {
-        double border_flow = 0.0;
         bool b = 0;
         if (blk.neighs_upper_idxs.size() == 0) {
             b = 1;
@@ -820,18 +863,29 @@ void Proc::MakeStep() {
         for (int j = 1; j < blk.sz-1; j++) {
             int c_blk_num = (sz-1)*sz+j;
             double flows_sum = 0.0;
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            double t1 = blk.cells[(sz-1)*sz+(j-1)].temp[cur_temp_idx]; // левая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[(sz-1)*sz+(j+1)].temp[cur_temp_idx]; // правая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[(sz-2)*sz+j].temp[cur_temp_idx]; // нижняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
+            int n_neighs = 0;
 
             double x, y;
             blk.get_spacial_coords(i, j, &x, &y);
+            
+            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
+
+
+            // три соседних ячейки внутри этого же блока
+            if (USE_SIMPLE_FLOWS) {
+                flows_sum += blk.cells[(sz-1)*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += blk.cells[(sz-1)*sz+(j+1)].temp[cur_temp_idx]; // правая
+                flows_sum += blk.cells[(sz-2)*sz+j].temp[cur_temp_idx]; // нижняя
+                n_neighs += 3;
+            } else {
+                double t1 = blk.cells[(sz-1)*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[(sz-1)*sz+(j+1)].temp[cur_temp_idx]; // правая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[(sz-2)*sz+j].temp[cur_temp_idx]; // нижняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+            }
+            
             
             // если сверху есть блоки
             if (b != 1) {
@@ -858,7 +912,12 @@ void Proc::MakeStep() {
                                     if (n_blk->cells_lvl > blk.cells_lvl) {
                                         l = l / 2;
                                     }
-                                    outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    if (USE_SIMPLE_FLOWS) {
+                                        outer_flow += cells_in_idxs_temps[o][k];
+                                        n_neighs++;
+                                    } else {
+                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    }
                                 }
                             }
                         }
@@ -876,7 +935,12 @@ void Proc::MakeStep() {
                             if (n_blk->cells_lvl > blk.cells_lvl) {
                                 l = l / 2;
                             }
-                            outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            if (USE_SIMPLE_FLOWS) {
+                                outer_flow += c->temp[cur_temp_idx];
+                                n_neighs++;
+                            } else {
+                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            }
                         }
                     }
                 }
@@ -892,20 +956,28 @@ void Proc::MakeStep() {
                 get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
-                    flows_sum += - Area::a * (cond_func(x+d/2, y, time_step_n * tau) - t0) / (d/2) * l;
-                } else if (border_cond_type == 2) {
-                    flows_sum += cond_func(x+d/2, y, time_step_n * tau);
-                }
+                    if (USE_SIMPLE_FLOWS) {
+                        flows_sum += cond_func(x+d/2, y, time_step_n * tau);
+                        n_neighs++;
+                    } else {
+                        flows_sum += - Area::a * (cond_func(x+d/2, y, time_step_n * tau) - t0) / (d/2) * l;
+                    }
+                } //else if (border_cond_type == 2) {
+                //     flows_sum += cond_func(x+d/2, y, time_step_n * tau);
+                // }
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
-            mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            if (USE_SIMPLE_FLOWS) {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+            } else {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            }
         }
 }
 
         // left border
 {
-        double border_flow = 0.0;
         bool b = 0;
         if (blk.neighs_left_idxs.size() == 0) {
             b = 1;
@@ -916,18 +988,28 @@ void Proc::MakeStep() {
         for (int i = 1; i < blk.sz-1; i++) {
             int c_blk_num = i*sz+0;
             double flows_sum = 0.0;
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            double t1 = blk.cells[(i+1)*sz+0].temp[cur_temp_idx]; // верхняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[i*sz+1].temp[cur_temp_idx]; // правая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[(i-1)*sz+0].temp[cur_temp_idx]; // нижняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
+            int n_neighs = 0;
 
             double x, y;
             blk.get_spacial_coords(i, j, &x, &y);
+
+            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
+
+            // три соседних ячейки внутри этого же блока
+            if (USE_SIMPLE_FLOWS) {
+                flows_sum += blk.cells[(i+1)*sz+0].temp[cur_temp_idx]; // верхняя
+                flows_sum += blk.cells[i*sz+1].temp[cur_temp_idx]; // правая
+                flows_sum += blk.cells[(i-1)*sz+0].temp[cur_temp_idx]; // нижняя
+                n_neighs += 3;
+            } else {
+                double t1 = blk.cells[(i+1)*sz+0].temp[cur_temp_idx]; // верхняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[i*sz+1].temp[cur_temp_idx]; // правая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[(i-1)*sz+0].temp[cur_temp_idx]; // нижняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+            }
+            
             
             // если слева есть блоки
             if (b != 1) {
@@ -954,7 +1036,12 @@ void Proc::MakeStep() {
                                     if (n_blk->cells_lvl > blk.cells_lvl) {
                                         l = l / 2;
                                     }
-                                    outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    if (USE_SIMPLE_FLOWS) {
+                                        outer_flow += cells_in_idxs_temps[o][k];
+                                        n_neighs++;
+                                    } else {
+                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    }
                                 }
                             }
                         }
@@ -972,7 +1059,12 @@ void Proc::MakeStep() {
                             if (n_blk->cells_lvl > blk.cells_lvl) {
                                 l = l / 2;
                             }
-                            outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            if (USE_SIMPLE_FLOWS) {
+                                outer_flow += c->temp[cur_temp_idx];
+                                n_neighs++;
+                            } else {
+                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            }
                         }
                     }
                 }
@@ -988,20 +1080,28 @@ void Proc::MakeStep() {
                 get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
-                    flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
-                } else if (border_cond_type == 2) {
-                    flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                }
+                    if (USE_SIMPLE_FLOWS) {
+                        flows_sum += cond_func(x, y-d/2, time_step_n * tau);
+                        n_neighs++;
+                    } else {
+                        flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
+                    }
+                } //else if (border_cond_type == 2) {
+                //     flows_sum += cond_func(x, y-d/2, time_step_n * tau);
+                // }
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
-            mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            if (USE_SIMPLE_FLOWS) {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+            } else {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            }
         }
 }
 
        // right border
 {
-        double border_flow = 0.0;
         bool b = 0;
         if (blk.neighs_right_idxs.size() == 0) {
             b = 1;
@@ -1012,18 +1112,27 @@ void Proc::MakeStep() {
         for (int i = 1; i < blk.sz-1; i++) {
             int c_blk_num = i*sz+(sz-1);
             double flows_sum = 0.0;
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            double t1 = blk.cells[(i+1)*sz+j].temp[cur_temp_idx]; // верхняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[i*sz+(j-1)].temp[cur_temp_idx]; // левая
-            flows_sum += - Area::a * (t1 - t0) / d * l;
-            t1 = blk.cells[(i-1)*sz+j].temp[cur_temp_idx]; // нижняя
-            flows_sum += - Area::a * (t1 - t0) / d * l;
+            int n_neighs = 0;
 
             double x, y;
             blk.get_spacial_coords(i, j, &x, &y);
+
+            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
+
+            // три соседних ячейки внутри этого же блока
+            if (USE_SIMPLE_FLOWS) {
+                flows_sum += blk.cells[(i+1)*sz+j].temp[cur_temp_idx]; // верхняя
+                flows_sum += blk.cells[i*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += blk.cells[(i-1)*sz+j].temp[cur_temp_idx]; // нижняя
+                n_neighs += 3;
+            } else {
+                double t1 = blk.cells[(i+1)*sz+j].temp[cur_temp_idx]; // верхняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[i*sz+(j-1)].temp[cur_temp_idx]; // левая
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+                t1 = blk.cells[(i-1)*sz+j].temp[cur_temp_idx]; // нижняя
+                flows_sum += - Area::a * (t1 - t0) / d * l;
+            }
             
             // если справа есть блоки
             if (b != 1) {
@@ -1050,7 +1159,12 @@ void Proc::MakeStep() {
                                     if (n_blk->cells_lvl > blk.cells_lvl) {
                                         l = l / 2;
                                     }
-                                    outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    if (USE_SIMPLE_FLOWS) {
+                                        outer_flow += cells_in_idxs_temps[o][k];
+                                        n_neighs++;
+                                    } else {
+                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
+                                    }
                                 }
                             }
                         }
@@ -1068,7 +1182,12 @@ void Proc::MakeStep() {
                             if (n_blk->cells_lvl > blk.cells_lvl) {
                                 l = l / 2;
                             }
-                            outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            if (USE_SIMPLE_FLOWS) {
+                                outer_flow += c->temp[cur_temp_idx];
+                                n_neighs++;
+                            } else {
+                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
+                            }
                         }
                     }
                 }
@@ -1084,14 +1203,23 @@ void Proc::MakeStep() {
                 get_border_cond(&border_cond_type, &cond_func, UP);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
-                    flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
-                } else if (border_cond_type == 2) {
-                    flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                }
+                    if (USE_SIMPLE_FLOWS) {
+                        flows_sum += cond_func(x, y-d/2, time_step_n * tau);
+                        n_neighs++;
+                    } else {
+                        flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
+                    }
+                } //else if (border_cond_type == 2) {
+                //     flows_sum += cond_func(x, y-d/2, time_step_n * tau);
+                // }
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
-            mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            if (USE_SIMPLE_FLOWS) {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+            } else {
+                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+            }
         }
 }
 

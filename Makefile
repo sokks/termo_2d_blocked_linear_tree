@@ -3,7 +3,7 @@ COMPILER=mpicxx
 # COMPILER=mpixlcxx
 # COMPILER=mpixlcxx_r
 # COMPILER=xlc++_r
-OPTS=-O0 -std=c++11
+OPTS=-O0 -std=c++11 -openmp
 # OPTS=-O0
 # OPTS=-O0 -qsmp=omp
 RUN_OPTS=-m vn -env BG_MAXALIGNEXP=-1 -w 00:30:00

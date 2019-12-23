@@ -3,6 +3,7 @@
 #define FULL_DEBUG 0
 
 #define USE_SIMPLE_FLOWS 1
+// #define USE_OPEN_MP 1
 
 using std::vector;
 using std::map;
@@ -173,6 +174,7 @@ int Proc::BuildGhosts() {
 
     // (3) build border cells neighs pointers
     // TODO
+    build_border_cells_neighs_ptrs();
 
     stat.timers["build_ghosts"].Stop();
     MPI_Barrier(mpiInfo.comm);
@@ -190,22 +192,26 @@ void Proc::build_fake_ghost_blocks() {
     fake_blocks_out_ids = vector<vector<GlobalNumber_t> >(mpiInfo.comm_size);
     for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
         GlobalNumber_t blk_num = mesh.blocks[blk_i].idx.get_global_number();
-        // cout << mpiInfo.comm_rank << " " << blk_num << "  ";
-        // // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
-        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
-        //         cout << mpiInfo.comm_rank << " L: " << neight_num << " ";
-        //     }
-        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
-        //         cout << mpiInfo.comm_rank << " R: " << neight_num << " ";
-        //     }
-        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
-        //         cout << mpiInfo.comm_rank << " D: " << neight_num << " ";
-        //     }
-        //     for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
-        //         cout << mpiInfo.comm_rank << " U: " << neight_num << " ";
-        //     }
-        //     cout << endl;
-        // // }
+        cout << mpiInfo.comm_rank << " " << blk_num << "  ";
+        // if (mesh.blocks[blk_i].idx.get_global_number() == GlobalNumber_t(1536)) {
+            cout << " L: ";
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_left_idxs) {
+                cout << neight_num << " ";
+            }
+            cout << " R: ";
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_right_idxs) {
+                cout <<  neight_num << " ";
+            }
+            cout << " D: ";
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_down_idxs) {
+                cout << neight_num << " ";
+            }
+            cout << " U: ";
+            for (GlobalNumber_t neight_num: mesh.blocks[blk_i].neighs_upper_idxs) {
+                cout << neight_num << " ";
+            }
+            cout << endl;
+        // }
         for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_left_idxs.size(); jjj++) {
             GlobalNumber_t neight_num = mesh.blocks[blk_i].neighs_left_idxs[jjj];
             int o = find_owner(neight_num);
@@ -459,7 +465,7 @@ void Proc::build_needed_cells_for_blocks_map() {
 
         // bottom border
         for (int j = 0; j < sz; j++) {
-            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), 0*sz + j, c_lvl);
+            GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(mesh.blocks[blk_i].idx.get_global_number(), 0, j, c_lvl);
 
             for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_down_idxs.size(); jjj++) {
                 GlobalNumber_t neigh_blk_i = mesh.blocks[blk_i].neighs_down_idxs[jjj];
@@ -480,7 +486,7 @@ void Proc::build_needed_cells_for_blocks_map() {
         }
         // upper border
         for (int j = 0; j < sz; j++) {
-            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), (sz-1)*sz + j, c_lvl);
+            GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(mesh.blocks[blk_i].idx.get_global_number(), (sz-1), j, c_lvl);
 
             for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_upper_idxs.size(); jjj++) {
                 GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_upper_idxs[jjj];
@@ -500,7 +506,7 @@ void Proc::build_needed_cells_for_blocks_map() {
         }
         // left border
         for (int i = 0; i < sz; i++) {
-            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + 0, c_lvl);
+            GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(mesh.blocks[blk_i].idx.get_global_number(), i, 0, c_lvl);
 
             for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_left_idxs.size(); jjj++) {
                 GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_left_idxs[jjj];
@@ -520,7 +526,7 @@ void Proc::build_needed_cells_for_blocks_map() {
         }
         // right border
         for (int i = 0; i < sz; i++) {
-            GlobalNumber_t c_glob_idx = get_glob_idx(mesh.blocks[blk_i].idx.get_global_number(), i*sz + (sz-1), c_lvl);
+            GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(mesh.blocks[blk_i].idx.get_global_number(), i, (sz-1), c_lvl);
 
             for (int jjj = 0; jjj < mesh.blocks[blk_i].neighs_right_idxs.size(); jjj++) {
                 GlobalNumber_t n_blk_i = mesh.blocks[blk_i].neighs_right_idxs[jjj];
@@ -555,6 +561,10 @@ int Proc::find_owner(GlobalNumber_t cell_id) {
     return -1;
 }
 
+
+void Proc::build_border_cells_neighs_ptrs() {
+
+}
 
 int Proc::StartExchangeGhosts() {
     
@@ -662,10 +672,20 @@ void Proc::MakeStep() {
     int blk_i, i, j;
 
     // внутренние ячейки блока
+    #ifdef USE_OPEN_MP
     # pragma omp parallel
+    #endif
     {
-    cout << "proc " << mpiInfo.comm_rank << " thread " << omp_get_thread_num() << endl;
+    
+    int thread_num = 0;
+    #ifdef USE_OPEN_MP
+    thread_num = omp_get_thread_num();
+    #endif
+    cout << "proc " << mpiInfo.comm_rank << " thread " << thread_num << endl;
+
+    #ifdef USE_OPEN_MP
     # pragma omp for private(blk_i, i, j)
+    #endif
     for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
 
         double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
@@ -700,7 +720,7 @@ void Proc::MakeStep() {
                 double q = Area::Q(x, y, tau * time_step_n);
                 
                 // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
-
+                cout << "internal block cells: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
                 if (USE_SIMPLE_FLOWS) {
                     // просто среднее значение соседних ячеек + предыдущее значение в этой + источник
                     mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
@@ -734,9 +754,11 @@ void Proc::MakeStep() {
             b = 1;
         }
 
+        cout << "block: " << blk.i << endl;
+
         // проход по ячейкам нижней границы блока
         int i = 0;
-        for (int j = 1; j < blk.sz-1; j++) {
+        for (int j = 0; j < blk.sz; j++) {
             
             double flows_sum = 0.0;
             int n_neighs = 0;
@@ -764,7 +786,7 @@ void Proc::MakeStep() {
             
             // если снизу есть блоки
             if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_glob_idx(blk.idx.get_global_number(), 0*sz + j, blk.cells_lvl);
+                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), 0, j, blk.cells_lvl);
                 double outer_flow = 0.0;
 
                 // проход по всем блокам-соседям снизу и поиск в них конкретных ячеек, соседствующих с данной
@@ -776,6 +798,12 @@ void Proc::MakeStep() {
                     if (o != mpiInfo.comm_rank) {
                         BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
                         vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
+
+                        cout << "bottom neighs: ";
+                        for (auto bla: c_neighs) {
+                            cout << bla << " ";
+                        }
+                        cout << endl;
 
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
@@ -801,6 +829,13 @@ void Proc::MakeStep() {
                     else {
                         BlockOfCells *n_blk = mesh.find_block(n_blk_i);
                         vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
+                        
+                        cout << "bottom neighs (my): ";
+                        for (auto bla: c_neighs) {
+                            cout << bla << " ";
+                        }
+                        cout << endl;
+                        
                         // проход по соседям внутри этого блока
                         for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
                             GlobalNumber_t cc = c_neighs[jjj2];
@@ -843,6 +878,8 @@ void Proc::MakeStep() {
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
+            // cout << "bottom border: flows_sum=" << flows_sum << " q=" << q << endl;
+            cout << "bottom border: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
             if (USE_SIMPLE_FLOWS) {
                 mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
             } else {
@@ -860,7 +897,7 @@ void Proc::MakeStep() {
 
         // проход по ячейкам верхней границы блока
         int i = sz-1;
-        for (int j = 1; j < blk.sz-1; j++) {
+        for (int j = 0; j < blk.sz; j++) {
             int c_blk_num = (sz-1)*sz+j;
             double flows_sum = 0.0;
             int n_neighs = 0;
@@ -889,7 +926,7 @@ void Proc::MakeStep() {
             
             // если сверху есть блоки
             if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_glob_idx(blk.idx.get_global_number(), c_blk_num, blk.cells_lvl);
+                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), (sz-1), j, blk.cells_lvl);
                 double outer_flow = 0.0;
 
                 // проход по всем блокам-соседям сверху и поиск в них конкретных ячеек, соседствующих с данной
@@ -968,6 +1005,7 @@ void Proc::MakeStep() {
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
+            // cout << "upper border: flows_sum=" << flows_sum << " q=" << q << endl;
             if (USE_SIMPLE_FLOWS) {
                 mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
             } else {
@@ -983,9 +1021,9 @@ void Proc::MakeStep() {
             b = 1;
         }
 
-        // проход по ячейкам  границы блока
+        // проход по ячейкам левой границы блока
         int j = 0;
-        for (int i = 1; i < blk.sz-1; i++) {
+        for (int i = 0; i < blk.sz; i++) {
             int c_blk_num = i*sz+0;
             double flows_sum = 0.0;
             int n_neighs = 0;
@@ -1013,7 +1051,7 @@ void Proc::MakeStep() {
             
             // если слева есть блоки
             if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_glob_idx(blk.idx.get_global_number(), c_blk_num, blk.cells_lvl);
+                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), i, 0, blk.cells_lvl);
                 double outer_flow = 0.0;
 
                 // проход по всем блокам-соседям и поиск в них конкретных ячеек, соседствующих с данной
@@ -1071,13 +1109,13 @@ void Proc::MakeStep() {
 
                 flows_sum += outer_flow;
             }
-            // если блоков нет, то сверху граница
+            // если блоков нет, то слева граница
             else {
                 // get border cond
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, UP);
+                get_border_cond(&border_cond_type, &cond_func, LEFT);
                 stat.timers["get_border_cond"].Stop();
                 if (border_cond_type == 1) {
                     if (USE_SIMPLE_FLOWS) {
@@ -1092,6 +1130,7 @@ void Proc::MakeStep() {
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
+            // cout << "left border: flows_sum=" << flows_sum << " q=" << q << endl;
             if (USE_SIMPLE_FLOWS) {
                 mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
             } else {
@@ -1105,11 +1144,12 @@ void Proc::MakeStep() {
         bool b = 0;
         if (blk.neighs_right_idxs.size() == 0) {
             b = 1;
+            cout << "have right neighs" << endl;
         }
 
-        // проход по ячейкам  границы блока
+        // проход по ячейкам правой границы блока
         int j = sz-1;
-        for (int i = 1; i < blk.sz-1; i++) {
+        for (int i = 0; i < blk.sz; i++) {
             int c_blk_num = i*sz+(sz-1);
             double flows_sum = 0.0;
             int n_neighs = 0;
@@ -1136,12 +1176,12 @@ void Proc::MakeStep() {
             
             // если справа есть блоки
             if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_glob_idx(blk.idx.get_global_number(), c_blk_num, blk.cells_lvl);
+                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), i, (sz-1), blk.cells_lvl);
                 double outer_flow = 0.0;
 
                 // проход по всем блокам-соседям и поиск в них конкретных ячеек, соседствующих с данной
-                for (int jjj = 0; jjj < blk.neighs_left_idxs.size(); jjj++) {
-                    GlobalNumber_t n_blk_i = blk.neighs_left_idxs[jjj];
+                for (int jjj = 0; jjj < blk.neighs_right_idxs.size(); jjj++) {
+                    GlobalNumber_t n_blk_i = blk.neighs_right_idxs[jjj];
                     int o = find_owner(n_blk_i);
 
                     // если блок не у меня
@@ -1194,14 +1234,15 @@ void Proc::MakeStep() {
 
                 flows_sum += outer_flow;
             }
-            // если блоков нет, то сверху граница
+            // если блоков нет, то справа граница
             else {
                 // get border cond
                 char border_cond_type;
                 double (*cond_func)(double, double, double);
                 stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, UP);
+                get_border_cond(&border_cond_type, &cond_func, RIGHT);
                 stat.timers["get_border_cond"].Stop();
+                // cout << "right border! " << int(border_cond_type) << endl;
                 if (border_cond_type == 1) {
                     if (USE_SIMPLE_FLOWS) {
                         flows_sum += cond_func(x, y-d/2, time_step_n * tau);
@@ -1215,6 +1256,7 @@ void Proc::MakeStep() {
             }
 
             double q = Area::Q(x, y, tau * time_step_n);
+            // cout << "right border: flows_sum=" << flows_sum << " q=" << q << endl;
             if (USE_SIMPLE_FLOWS) {
                 mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
             } else {

@@ -152,6 +152,7 @@ private:
     void build_fake_ghost_blocks();
     void build_ghost_cells();
     void build_needed_cells_for_blocks_map();
+    void build_border_cells_neighs_ptrs();
 
     void get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border);
 

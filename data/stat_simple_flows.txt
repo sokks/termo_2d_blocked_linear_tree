@@ -1,0 +1,20 @@
+BASE_LVL=8
+MAX_LVL=10
+BASE_BLK_LVL=3
+MAX_BLK_LVL=6
+TIME_STEPS=1000
+
+n_blocks=160
+n_cells=163840
+
+1t -- vn mode
+4t -- smp mode
+
+1p1t | max_step: 174.711 | max_compute_temps: 174.691 | max_exchange_ghosts: 0.00596551 | max_build_ghosts: 0.0075901  | max_init_mesh: 0.140202
+1p4t | max_step: 108.347 | max_compute_temps: 108.325 | max_exchange_ghosts: 0.00633179 | max_build_ghosts: 0.00762076 | max_init_mesh: 0.2061
+2p1t | max_step: 87.4111 | max_compute_temps: 87.3309 | max_exchange_ghosts: 0.858804   | max_build_ghosts: 0.00752771 | max_init_mesh: 0.0768047
+2p4t | max_step: 53.8593 | max_compute_temps: 53.7743 | max_exchange_ghosts: 1.56312    | max_build_ghosts: 0.00745739 | max_init_mesh: 0.0711623
+4p1t | max_step: 44.8541 | max_compute_temps: 44.778  | max_exchange_ghosts: 1.53274    | max_build_ghosts: 0.0138188  | max_init_mesh: 0.0466198
+4p4t | max_step: 27.054  | max_compute_temps: 26.976  | max_exchange_ghosts: 2.01012    | max_build_ghosts: 0.00861321 | max_init_mesh: 0.0395484
+8p1t | max_step: 22.9959 | max_compute_temps: 22.8948 | max_exchange_ghosts: 1.75793    | max_build_ghosts: 0.00967088 | max_init_mesh: 0.0324818
+8p4t | max_step: 14.4998 | max_compute_temps: 14.3992 | max_exchange_ghosts: 1.88795    | max_build_ghosts: 0.00930866 | max_init_mesh: 0.0257823

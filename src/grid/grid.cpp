@@ -1234,7 +1234,7 @@ SimpleCell *BlockOfCells::find_border_cell_by_global_idx(GlobalNumber_t target) 
     SimpleCell *res = NULL;
 
     GlobalNumber_t mask(-1);
-    mask = mask << 2*(max_lvl - max_blk_lvl);
+    mask = mask << 2*(max_lvl - idx.lvl); // тут наверное аналогично check_cell_owner сдвиг
     mask = ~mask;
 
     GlobalNumber_t idx = target & mask;
@@ -1244,9 +1244,15 @@ SimpleCell *BlockOfCells::find_border_cell_by_global_idx(GlobalNumber_t target) 
         return NULL;
     }
 
-    return &cells[idx];
+    // по идее тут нужен сплит интс
+    int i, j;
+    split_ints(idx, max_lvl, &i, &j);
+
+    return &cells[i*sz+j]; // тут нужен индекс в массиве ячеек (который тип матрица)
 }
 
+// get_glob_idx получает глобальный номер ячейки во всей сетке по глобальному 
+// номеру блока и глобавльному номеру ячейки в блоке (+ уровень ячеек)
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl) {
     GlobalNumber_t res = blk_i;
     // res = res << 2*(max_lvl - max_blk_lvl);
@@ -1254,9 +1260,27 @@ GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cel
     return res;
 }
 
-int check_cell_owner(GlobalNumber_t blk_i, GlobalNumber_t cell_i) {
+GlobalNumber_t get_cell_global_number_in_full_grid(GlobalNumber_t blk_gloal_number, int cell_i, int cell_j, int cell_lvl) {
+    TreeIndex cell_idx = TreeIndex(cell_lvl, cell_i, cell_j);
+    GlobalNumber_t cell_global_number = cell_idx.get_global_number();
+    return get_glob_idx(blk_gloal_number, cell_global_number, cell_lvl);
+}
+
+int check_cell_owner(GlobalNumber_t blk_i, int blk_lvl, GlobalNumber_t cell_i) {
     GlobalNumber_t mask(-1);
-    mask = mask << 2*(max_lvl - max_blk_lvl);
+
+    // std::bitset<sizeof(GlobalNumber_t)*8> x(mask);
+    // cout << "sizeof(GlobalNumber_t)=" << sizeof(GlobalNumber_t) << " sizeof(long long int)=" << sizeof(long long int) << " mask:" << x << '\n';
+
+    mask = mask << 2*(max_lvl - blk_lvl);
+
+    // std::bitset<sizeof(GlobalNumber_t)*8> bs_cell_i(cell_i);
+    // std::bitset<sizeof(GlobalNumber_t)*8> bs_blk_i(blk_i);
+    // std::bitset<sizeof(GlobalNumber_t)*8> bs_mask(mask);
+    // GlobalNumber_t cell_blk_i = cell_i & mask;
+    // std::bitset<sizeof(GlobalNumber_t)*8> bs_cell_blk_i(cell_blk_i);
+    // cout << "check_cell_owner: " << bs_cell_i << " & " << bs_mask << " = " << bs_cell_blk_i << " ?== " << bs_blk_i << '\n';
+
     return (cell_i & mask) ==  blk_i;
 }
 
@@ -1265,7 +1289,9 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
 
     int neigh_lvl = blk->cells_lvl;
 
-    // cout << "find_cell_neighs_ids_in_blk: cell_idx=" << cell_glob_idx << " cell_lvl=" << cell_lvl << " neigh_blk_idx=" << blk->idx.get_global_number() << " neigh_lvl=" << blk->cells_lvl << endl;
+    // if (neigh_dir == DOWN) {
+    //     cout << "find_cell_neighs_ids_in_blk: cell_idx=" << cell_glob_idx << " cell_lvl=" << cell_lvl << " neigh_blk_idx=" << blk->idx.get_global_number() << " neigh_lvl=" << blk->cells_lvl << endl;
+    // }
 
     if (abs(cell_lvl - neigh_lvl) > 1) {
         cout << "[ERROR] not 2:1 balanced grid!\n";
@@ -1282,10 +1308,16 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
         neighs.push_back(c_idx.get_face_neighbor(neigh_dir));
     }
 
+    cout << "possible neighs: ";
+    for (auto nei: neighs) {
+        cout << nei.get_global_number() << " ";
+    }
+    cout << endl;
+
     vector<GlobalNumber_t> res;
     for (int jjj = 0; jjj < neighs.size(); jjj++) {
         GlobalNumber_t n = neighs[jjj].get_global_number();
-        if (check_cell_owner(blk->idx.get_global_number(), n)) {
+        if (check_cell_owner(blk->idx.get_global_number(), blk->idx.lvl, n)) {
             res.push_back(n);
         }
     }

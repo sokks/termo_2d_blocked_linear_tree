@@ -229,7 +229,8 @@ struct BlockOfCells {
 };
 
 GlobalNumber_t get_glob_idx(GlobalNumber_t blk_i, GlobalNumber_t cell_i, int cell_lvl);
-int check_cell_owner(GlobalNumber_t blk_i, GlobalNumber_t cell_i);
+GlobalNumber_t get_cell_global_number_in_full_grid(GlobalNumber_t blk_gloal_number, int cell_i, int cell_j, int cell_lvl);
+int check_cell_owner(GlobalNumber_t blk_i, int blk_lvl, GlobalNumber_t cell_i);
 vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx, int cell_lvl, BlockOfCells* blk, Neigh neigh_dir);
 
 struct BlockedLinearTree {

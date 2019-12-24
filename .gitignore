@@ -3,6 +3,7 @@ data/refine/*
 build/*
 bin/*
 *.DS_Store*
+.vscode*
 *tmp*
 .idea*
 CMake*

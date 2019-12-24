@@ -26,6 +26,11 @@ double Area::T0(double x, double y) {
     // double mean_x = 0.25;
     // double mean_y = 0.25;
     // return 0.05 * (1.0 / (sigma_x * sigma_y)) * exp( - ((x - mean_x)*(x - mean_x))/(2*sigma_x*sigma_x) - ((y - mean_y)*(y - mean_y))/(2*sigma_y*sigma_y) );
+    
+
+    if ( x > x_end - (x_end-x_start)/64) {
+        return 1.0;
+    }
     return 0.0;
 }
 
@@ -93,8 +98,8 @@ void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(doubl
             // *cond_type = 2;
             // *cond_func = &BorderCond2;
             *cond_type = 1;
-            // *cond_func = &BorderCond1;
-            *cond_func = &BorderCondFixed1;
+            *cond_func = &BorderCond1;
+            // *cond_func = &BorderCondFixed1;
             break;
         }
         case UP: {
@@ -136,7 +141,7 @@ double Area::Q(double x, double y, double t) {
     //     return 0.01;
     // }
 
-    if ( (x < x_end / 1000) && (y < y_end / 1000) ) {
+    if ( (x < x_end / 16) && (y < y_end / 16) ) {
         return 1.0;
     }
 

@@ -571,7 +571,7 @@ int Proc::StartExchangeGhosts() {
     // cout << mpiInfo.comm_rank << " ExchangeGhosts started\n";
     stat.timers["exchange_ghosts"].Start();
 
-    int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
+    int temp_l_corr = (time_step_n-1) % 2; // чтобы брать значение temp[0] или temp[1] (-1 т.к. увеличиваем в самом начале шага)
     int cur_temp_idx = temp_l_corr;
     int req_num;
 
@@ -620,8 +620,7 @@ int Proc::StartExchangeGhosts() {
 int Proc::StopExchangeGhosts() {
     stat.timers["exchange_ghosts"].Start();
 
-    int time_step_n1 = time_step_n - 1; // хак: потому что эта функция вызывается уже после обновления номера шага
-    int temp_l_corr = time_step_n1 % 2; // чтобы брать значение temp[0] или temp[1]
+    int temp_l_corr = (time_step_n-1) % 2; // чтобы брать значение temp[0] или temp[1] (потому что эта функция вызывается уже после обновления номера шага)
     int cur_temp_idx = temp_l_corr;
     int next_temp_idx = (temp_l_corr + 1) % 2;
 
@@ -639,7 +638,7 @@ int Proc::StopExchangeGhosts() {
             for (int k = 0; k < blocks_cells_in_lens[n][j]; k++) {
                 GlobalNumber_t cell_idx = cells_in_idxs[n][offset_sum + k];
                 SimpleCell *c = (*blk).find_border_cell_by_global_idx(cell_idx);
-                c->temp[next_temp_idx] = cells_in_idxs_temps[n][offset_sum + k];
+                c->temp[cur_temp_idx] = cells_in_idxs_temps[n][offset_sum + k];
             }
             offset_sum += blocks_cells_in_lens[n][j];
         }
@@ -651,11 +650,11 @@ int Proc::StopExchangeGhosts() {
 
 
 void Proc::MakeStep() {
-
+    time_step_n++;
     // usleep(10000000);
 
     stat.timers["step"].Start();
-    int temp_l_corr = time_step_n % 2; // чтобы брать значение temp[0] или temp[1]
+    int temp_l_corr = (time_step_n-1) % 2; // чтобы брать значение temp[0] или temp[1]
     int cur_temp_idx = temp_l_corr;
     int next_temp_idx = (temp_l_corr + 1) % 2;
 
@@ -664,73 +663,9 @@ void Proc::MakeStep() {
     // PrintMyCells();
     // PrintGhostCells();
 
-    time_step_n++;
-
-
+    // внутренние ячейки блоков
     stat.timers["compute_temps"].Start();
-
-    int blk_i, i, j;
-
-    // внутренние ячейки блока
-    #ifdef USE_OPEN_MP
-    # pragma omp parallel
-    #endif
-    {
-    
-    int thread_num = 0;
-    #ifdef USE_OPEN_MP
-    thread_num = omp_get_thread_num();
-    #endif
-    cout << "proc " << mpiInfo.comm_rank << " thread " << thread_num << endl;
-
-    #ifdef USE_OPEN_MP
-    # pragma omp for private(blk_i, i, j)
-    #endif
-    for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
-
-        double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
-        int sz = mesh.blocks[blk_i].sz;
-        double l = d;
-        double S = d * d;
-
-        for (i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
-            for (j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
-                double flows_sum = 0.0;
-                int n_neighs = 4;
-                double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
-
-                if (USE_SIMPLE_FLOWS) {
-                    flows_sum += mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
-                    flows_sum += mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
-                    flows_sum += mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
-                    flows_sum += mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
-                } else {
-                    double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
-                    flows_sum += - Area::a * (t1 - t0) / d * l;
-                    t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
-                    flows_sum += - Area::a * (t1 - t0) / d * l;
-                    t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
-                    flows_sum += - Area::a * (t1 - t0) / d * l;
-                    t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
-                    flows_sum += - Area::a * (t1 - t0) / d * l;
-                }
-
-                double x, y;
-                mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
-                double q = Area::Q(x, y, tau * time_step_n);
-                
-                // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
-                cout << "internal block cells: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
-                if (USE_SIMPLE_FLOWS) {
-                    // просто среднее значение соседних ячеек + предыдущее значение в этой + источник
-                    mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-                } else {
-                    mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-                }
-            }
-        }
-    }
-    }
+    process_blocks_inner_cells();
     stat.timers["compute_temps"].Stop();
 
     StopExchangeGhosts();
@@ -738,540 +673,374 @@ void Proc::MakeStep() {
     // границы блоков
     stat.timers["compute_temps"].Start();
     stat.timers["compute_temps_border"].Start();
-
-    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
-        BlockOfCells& blk = mesh.blocks[blk_i];
-        
-        double d = get_lvl_dx(blk.cells_lvl);
-        int sz = blk.sz;
-        double l = d; // длина грани между ячейками
-        double S = d * d;
-
-        // bottom border
-{
-        bool b = 0;
-        if (blk.neighs_down_idxs.size() == 0) {
-            b = 1;
-        }
-
-        cout << "block: " << blk.i << endl;
-
-        // проход по ячейкам нижней границы блока
-        int i = 0;
-        for (int j = 0; j < blk.sz; j++) {
-            
-            double flows_sum = 0.0;
-            int n_neighs = 0;
-
-            double t0 = blk.cells[0*sz+j].temp[cur_temp_idx];
-            
-            double x, y;
-            blk.get_spacial_coords(i, j, &x, &y);
-
-
-            // три соседних ячейки внутри этого же блока
-            if (USE_SIMPLE_FLOWS) {
-                flows_sum += blk.cells[0*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += blk.cells[0*sz+(j+1)].temp[cur_temp_idx]; // правая
-                flows_sum += blk.cells[1*sz+j].temp[cur_temp_idx]; // верхняя
-                n_neighs += 3;
-            } else {
-                double t1 = blk.cells[0*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[0*sz+(j+1)].temp[cur_temp_idx]; // правая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[1*sz+j].temp[cur_temp_idx]; // верхняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-            }
-            
-            // если снизу есть блоки
-            if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), 0, j, blk.cells_lvl);
-                double outer_flow = 0.0;
-
-                // проход по всем блокам-соседям снизу и поиск в них конкретных ячеек, соседствующих с данной
-                for (int jjj = 0; jjj < blk.neighs_down_idxs.size(); jjj++) {
-                    GlobalNumber_t n_blk_i = blk.neighs_down_idxs[jjj];
-                    int o = find_owner(n_blk_i);
-
-                    // если нижний блок не у меня
-                    if (o != mpiInfo.comm_rank) {
-                        BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
-
-                        cout << "bottom neighs: ";
-                        for (auto bla: c_neighs) {
-                            cout << bla << " ";
-                        }
-                        cout << endl;
-
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            for (int k = 0; k < cells_in_idxs[o].size(); k++) {
-                                if (cells_in_idxs[o][k] == cc) {
-                                    int l = d;
-                                    // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                                    if (n_blk->cells_lvl > blk.cells_lvl) {
-                                        l = l / 2;
-                                    }
-                                    if (USE_SIMPLE_FLOWS) {
-                                        outer_flow += cells_in_idxs_temps[o][k];
-                                        n_neighs++;
-                                    } else {
-                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // если нижний блок у меня 
-                    else {
-                        BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, DOWN);
-                        
-                        cout << "bottom neighs (my): ";
-                        for (auto bla: c_neighs) {
-                            cout << bla << " ";
-                        }
-                        cout << endl;
-                        
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            SimpleCell *c = n_blk->find_border_cell_by_global_idx(cc);
-                            int l = d;
-                            // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                            if (n_blk->cells_lvl > blk.cells_lvl) {
-                                l = l / 2;
-                            }
-                            if (USE_SIMPLE_FLOWS) {
-                                outer_flow += c->temp[cur_temp_idx];
-                                n_neighs++;
-                            } else {
-                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
-                            }
-                        }
-                    }
-                }
-
-                flows_sum += outer_flow;
-            }
-            // если нижних блоков нет, то снизу граница
-            else {
-                // get border cond
-                char border_cond_type;
-                double (*cond_func)(double, double, double);
-                stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, DOWN);
-                stat.timers["get_border_cond"].Stop();
-                if (border_cond_type == 1) {
-                    if (USE_SIMPLE_FLOWS) {
-                        flows_sum += cond_func(x-d/2, y, time_step_n * tau);
-                        n_neighs++;
-                    } else {
-                        flows_sum += - Area::a * (cond_func(x-d/2, y, time_step_n * tau) - t0) / (d/2) * l;
-                    }
-                } //else if (border_cond_type == 2) {
-                //     flows_sum += cond_func(x-d/2, y, time_step_n * tau);
-                // }
-            }
-
-            double q = Area::Q(x, y, tau * time_step_n);
-            // cout << "bottom border: flows_sum=" << flows_sum << " q=" << q << endl;
-            cout << "bottom border: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
-            if (USE_SIMPLE_FLOWS) {
-                mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-            } else {
-                mesh.blocks[blk_i].cells[0*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-            }
-        }
-}
-
-        // upper border
-{
-        bool b = 0;
-        if (blk.neighs_upper_idxs.size() == 0) {
-            b = 1;
-        }
-
-        // проход по ячейкам верхней границы блока
-        int i = sz-1;
-        for (int j = 0; j < blk.sz; j++) {
-            int c_blk_num = (sz-1)*sz+j;
-            double flows_sum = 0.0;
-            int n_neighs = 0;
-
-            double x, y;
-            blk.get_spacial_coords(i, j, &x, &y);
-            
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-
-            // три соседних ячейки внутри этого же блока
-            if (USE_SIMPLE_FLOWS) {
-                flows_sum += blk.cells[(sz-1)*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += blk.cells[(sz-1)*sz+(j+1)].temp[cur_temp_idx]; // правая
-                flows_sum += blk.cells[(sz-2)*sz+j].temp[cur_temp_idx]; // нижняя
-                n_neighs += 3;
-            } else {
-                double t1 = blk.cells[(sz-1)*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[(sz-1)*sz+(j+1)].temp[cur_temp_idx]; // правая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[(sz-2)*sz+j].temp[cur_temp_idx]; // нижняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-            }
-            
-            
-            // если сверху есть блоки
-            if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), (sz-1), j, blk.cells_lvl);
-                double outer_flow = 0.0;
-
-                // проход по всем блокам-соседям сверху и поиск в них конкретных ячеек, соседствующих с данной
-                for (int jjj = 0; jjj < blk.neighs_upper_idxs.size(); jjj++) {
-                    GlobalNumber_t n_blk_i = blk.neighs_upper_idxs[jjj];
-                    int o = find_owner(n_blk_i);
-
-                    // если верхний блок не у меня
-                    if (o != mpiInfo.comm_rank) {
-                        BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, UP);
-
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            for (int k = 0; k < cells_in_idxs[o].size(); k++) {
-                                if (cells_in_idxs[o][k] == cc) {
-                                    int l = d;
-                                    // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                                    if (n_blk->cells_lvl > blk.cells_lvl) {
-                                        l = l / 2;
-                                    }
-                                    if (USE_SIMPLE_FLOWS) {
-                                        outer_flow += cells_in_idxs_temps[o][k];
-                                        n_neighs++;
-                                    } else {
-                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // если верхний блок у меня 
-                    else {
-                        BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, UP);
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            SimpleCell *c = n_blk->find_border_cell_by_global_idx(cc);
-                            int l = d;
-                            // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                            if (n_blk->cells_lvl > blk.cells_lvl) {
-                                l = l / 2;
-                            }
-                            if (USE_SIMPLE_FLOWS) {
-                                outer_flow += c->temp[cur_temp_idx];
-                                n_neighs++;
-                            } else {
-                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
-                            }
-                        }
-                    }
-                }
-
-                flows_sum += outer_flow;
-            }
-            // если верхних блоков нет, то сверху граница
-            else {
-                // get border cond
-                char border_cond_type;
-                double (*cond_func)(double, double, double);
-                stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, UP);
-                stat.timers["get_border_cond"].Stop();
-                if (border_cond_type == 1) {
-                    if (USE_SIMPLE_FLOWS) {
-                        flows_sum += cond_func(x+d/2, y, time_step_n * tau);
-                        n_neighs++;
-                    } else {
-                        flows_sum += - Area::a * (cond_func(x+d/2, y, time_step_n * tau) - t0) / (d/2) * l;
-                    }
-                } //else if (border_cond_type == 2) {
-                //     flows_sum += cond_func(x+d/2, y, time_step_n * tau);
-                // }
-            }
-
-            double q = Area::Q(x, y, tau * time_step_n);
-            // cout << "upper border: flows_sum=" << flows_sum << " q=" << q << endl;
-            if (USE_SIMPLE_FLOWS) {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-            } else {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-            }
-        }
-}
-
-        // left border
-{
-        bool b = 0;
-        if (blk.neighs_left_idxs.size() == 0) {
-            b = 1;
-        }
-
-        // проход по ячейкам левой границы блока
-        int j = 0;
-        for (int i = 0; i < blk.sz; i++) {
-            int c_blk_num = i*sz+0;
-            double flows_sum = 0.0;
-            int n_neighs = 0;
-
-            double x, y;
-            blk.get_spacial_coords(i, j, &x, &y);
-
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            if (USE_SIMPLE_FLOWS) {
-                flows_sum += blk.cells[(i+1)*sz+0].temp[cur_temp_idx]; // верхняя
-                flows_sum += blk.cells[i*sz+1].temp[cur_temp_idx]; // правая
-                flows_sum += blk.cells[(i-1)*sz+0].temp[cur_temp_idx]; // нижняя
-                n_neighs += 3;
-            } else {
-                double t1 = blk.cells[(i+1)*sz+0].temp[cur_temp_idx]; // верхняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[i*sz+1].temp[cur_temp_idx]; // правая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[(i-1)*sz+0].temp[cur_temp_idx]; // нижняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-            }
-            
-            
-            // если слева есть блоки
-            if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), i, 0, blk.cells_lvl);
-                double outer_flow = 0.0;
-
-                // проход по всем блокам-соседям и поиск в них конкретных ячеек, соседствующих с данной
-                for (int jjj = 0; jjj < blk.neighs_left_idxs.size(); jjj++) {
-                    GlobalNumber_t n_blk_i = blk.neighs_left_idxs[jjj];
-                    int o = find_owner(n_blk_i);
-
-                    // если блок не у меня
-                    if (o != mpiInfo.comm_rank) {
-                        BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, LEFT);
-
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            for (int k = 0; k < cells_in_idxs[o].size(); k++) {
-                                if (cells_in_idxs[o][k] == cc) {
-                                    int l = d;
-                                    // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                                    if (n_blk->cells_lvl > blk.cells_lvl) {
-                                        l = l / 2;
-                                    }
-                                    if (USE_SIMPLE_FLOWS) {
-                                        outer_flow += cells_in_idxs_temps[o][k];
-                                        n_neighs++;
-                                    } else {
-                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // если верхний блок у меня 
-                    else {
-                        BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, LEFT);
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            SimpleCell *c = n_blk->find_border_cell_by_global_idx(cc);
-                            int l = d;
-                            // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                            if (n_blk->cells_lvl > blk.cells_lvl) {
-                                l = l / 2;
-                            }
-                            if (USE_SIMPLE_FLOWS) {
-                                outer_flow += c->temp[cur_temp_idx];
-                                n_neighs++;
-                            } else {
-                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
-                            }
-                        }
-                    }
-                }
-
-                flows_sum += outer_flow;
-            }
-            // если блоков нет, то слева граница
-            else {
-                // get border cond
-                char border_cond_type;
-                double (*cond_func)(double, double, double);
-                stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, LEFT);
-                stat.timers["get_border_cond"].Stop();
-                if (border_cond_type == 1) {
-                    if (USE_SIMPLE_FLOWS) {
-                        flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                        n_neighs++;
-                    } else {
-                        flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
-                    }
-                } //else if (border_cond_type == 2) {
-                //     flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                // }
-            }
-
-            double q = Area::Q(x, y, tau * time_step_n);
-            // cout << "left border: flows_sum=" << flows_sum << " q=" << q << endl;
-            if (USE_SIMPLE_FLOWS) {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-            } else {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-            }
-        }
-}
-
-       // right border
-{
-        bool b = 0;
-        if (blk.neighs_right_idxs.size() == 0) {
-            b = 1;
-            cout << "have right neighs" << endl;
-        }
-
-        // проход по ячейкам правой границы блока
-        int j = sz-1;
-        for (int i = 0; i < blk.sz; i++) {
-            int c_blk_num = i*sz+(sz-1);
-            double flows_sum = 0.0;
-            int n_neighs = 0;
-
-            double x, y;
-            blk.get_spacial_coords(i, j, &x, &y);
-
-            double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-
-            // три соседних ячейки внутри этого же блока
-            if (USE_SIMPLE_FLOWS) {
-                flows_sum += blk.cells[(i+1)*sz+j].temp[cur_temp_idx]; // верхняя
-                flows_sum += blk.cells[i*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += blk.cells[(i-1)*sz+j].temp[cur_temp_idx]; // нижняя
-                n_neighs += 3;
-            } else {
-                double t1 = blk.cells[(i+1)*sz+j].temp[cur_temp_idx]; // верхняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[i*sz+(j-1)].temp[cur_temp_idx]; // левая
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-                t1 = blk.cells[(i-1)*sz+j].temp[cur_temp_idx]; // нижняя
-                flows_sum += - Area::a * (t1 - t0) / d * l;
-            }
-            
-            // если справа есть блоки
-            if (b != 1) {
-                GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), i, (sz-1), blk.cells_lvl);
-                double outer_flow = 0.0;
-
-                // проход по всем блокам-соседям и поиск в них конкретных ячеек, соседствующих с данной
-                for (int jjj = 0; jjj < blk.neighs_right_idxs.size(); jjj++) {
-                    GlobalNumber_t n_blk_i = blk.neighs_right_idxs[jjj];
-                    int o = find_owner(n_blk_i);
-
-                    // если блок не у меня
-                    if (o != mpiInfo.comm_rank) {
-                        BlockOfCells* n_blk = fake_ghost_blocks[n_blk_i];
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, RIGHT);
-
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            for (int k = 0; k < cells_in_idxs[o].size(); k++) {
-                                if (cells_in_idxs[o][k] == cc) {
-                                    int l = d;
-                                    // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                                    if (n_blk->cells_lvl > blk.cells_lvl) {
-                                        l = l / 2;
-                                    }
-                                    if (USE_SIMPLE_FLOWS) {
-                                        outer_flow += cells_in_idxs_temps[o][k];
-                                        n_neighs++;
-                                    } else {
-                                        outer_flow += - Area::a * (cells_in_idxs_temps[o][k] - t0) / d * l;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // если блок у меня 
-                    else {
-                        BlockOfCells *n_blk = mesh.find_block(n_blk_i);
-                        vector<GlobalNumber_t> c_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, RIGHT);
-                        // проход по соседям внутри этого блока
-                        for (int jjj2 = 0; jjj2 < c_neighs.size(); jjj2++) {
-                            GlobalNumber_t cc = c_neighs[jjj2];
-                            SimpleCell *c = n_blk->find_border_cell_by_global_idx(cc);
-                            int l = d;
-                            // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
-                            if (n_blk->cells_lvl > blk.cells_lvl) {
-                                l = l / 2;
-                            }
-                            if (USE_SIMPLE_FLOWS) {
-                                outer_flow += c->temp[cur_temp_idx];
-                                n_neighs++;
-                            } else {
-                                outer_flow += - Area::a * (c->temp[cur_temp_idx] - t0) / d * l;
-                            }
-                        }
-                    }
-                }
-
-                flows_sum += outer_flow;
-            }
-            // если блоков нет, то справа граница
-            else {
-                // get border cond
-                char border_cond_type;
-                double (*cond_func)(double, double, double);
-                stat.timers["get_border_cond"].Start();
-                get_border_cond(&border_cond_type, &cond_func, RIGHT);
-                stat.timers["get_border_cond"].Stop();
-                // cout << "right border! " << int(border_cond_type) << endl;
-                if (border_cond_type == 1) {
-                    if (USE_SIMPLE_FLOWS) {
-                        flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                        n_neighs++;
-                    } else {
-                        flows_sum += - Area::a * (cond_func(x, y-d/2, time_step_n * tau) - t0) / (d/2) * l;
-                    }
-                } //else if (border_cond_type == 2) {
-                //     flows_sum += cond_func(x, y-d/2, time_step_n * tau);
-                // }
-            }
-
-            double q = Area::Q(x, y, tau * time_step_n);
-            // cout << "right border: flows_sum=" << flows_sum << " q=" << q << endl;
-            if (USE_SIMPLE_FLOWS) {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-            } else {
-                mesh.blocks[blk_i].cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-            }
-        }
-}
-
-    }
-    
+    process_blocks_border_cells();
     stat.timers["compute_temps_border"].Stop();
     stat.timers["compute_temps"].Stop();
 
     stat.timers["step"].Stop();
 }
+
+void Proc::process_blocks_inner_cells() {
+    int temp_l_corr = (time_step_n-1) % 2; // -1 т.к. увеличиваем счетчик time_step_n в самом начале выполнения шага
+    int cur_temp_idx = temp_l_corr;
+    int next_temp_idx = (temp_l_corr + 1) % 2;
+    
+    int blk_i, i, j;
+
+    // внутренние ячейки блоков
+    #ifdef USE_OPEN_MP
+    # pragma omp parallel
+    #endif
+    {
+    
+        int thread_num = 0;
+        #ifdef USE_OPEN_MP
+        thread_num = omp_get_thread_num();
+        #endif
+        cout << "proc " << mpiInfo.comm_rank << " thread " << thread_num << endl;
+
+        #ifdef USE_OPEN_MP
+        # pragma omp for private(blk_i, i, j)
+        #endif
+        for (blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+
+            double d = get_lvl_dx(mesh.blocks[blk_i].cells_lvl);
+            int sz = mesh.blocks[blk_i].sz;
+            double l = d;
+            double S = d * d;
+
+            for (i = 1; i < mesh.blocks[blk_i].sz - 1; i++) {
+                for (j = 1; j < mesh.blocks[blk_i].sz - 1; j++) {
+                    double flows_sum = 0.0;
+                    int n_neighs = 4;
+                    double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
+
+                    if (USE_SIMPLE_FLOWS) {
+                        flows_sum += mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
+                        flows_sum += mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
+                        flows_sum += mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
+                        flows_sum += mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
+                    } else {
+                        double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
+                        flows_sum += - Area::a * (t1 - t0) / d * l;
+                        t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
+                        flows_sum += - Area::a * (t1 - t0) / d * l;
+                        t1 = mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
+                        flows_sum += - Area::a * (t1 - t0) / d * l;
+                        t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
+                        flows_sum += - Area::a * (t1 - t0) / d * l;
+                    }
+
+                    double x, y;
+                    mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
+                    double q = Area::Q(x, y, tau * time_step_n);
+                    
+                    // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
+                    cout << "internal block cells: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
+                    if (USE_SIMPLE_FLOWS) {
+                        // просто среднее значение соседних ячеек + предыдущее значение в этой + источник
+                        mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+                    } else {
+                        mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Proc::process_blocks_border_cells() {
+
+    int temp_l_corr = (time_step_n-1) % 2; // чтобы брать значение temp[0] или temp[1]
+    int cur_temp_idx = temp_l_corr;
+    int next_temp_idx = (temp_l_corr + 1) % 2;
+
+    int i, j;
+    for (int blk_i = 0; blk_i < mesh.blocks.size(); blk_i++) {
+        BlockOfCells& blk = mesh.blocks[blk_i];
+
+        // upper border
+        i = blk.sz - 1;
+        for (j = 0; j < blk.sz ; j++) {
+            process_block_border_cell(blk, i, j);
+        }
+        // bottom border
+        i = 0;
+        for (j = 0; j < blk.sz ; j++) {
+            process_block_border_cell(blk, i, j);
+        }
+        // right border
+        j = 0;
+        for (i = 1; i < blk.sz - 1 ; i++) {
+            process_block_border_cell(blk, i, j);
+        }
+         // left border
+        j = blk.sz - 1;
+        for (i = 1; i < blk.sz - 1 ; i++) {
+            process_block_border_cell(blk, i, j);
+        }
+    }
+}
+
+ bool is_cell_on_area_border(BlockOfCells &blk, int i, int j, Neigh dir) {
+    switch (dir) {
+    case DOWN:
+        return (i == 0) && (blk.neighs_down_idxs.size() == 0);
+    case UP:
+        return (i == blk.sz-1) && (blk.neighs_upper_idxs.size() == 0);
+    case LEFT:
+        return (j == 0) && (blk.neighs_left_idxs.size() == 0);
+    case RIGHT:
+        return (j == blk.sz-1) && (blk.neighs_right_idxs.size() == 0);
+    default:
+        return false;
+    }
+}
+
+std::pair<double,int> Proc::compute_inblock_flows_for_border_cell(BlockOfCells& blk, int i, int j) {
+    int cur_temp_idx = (time_step_n-1) % 2;
+    int sz = blk.sz;
+
+    double d = get_lvl_dx(blk.cells_lvl);
+    double l = d;
+
+    double t0 = blk.cells[i*sz+j].temp[cur_temp_idx];
+
+    double flows_this_block_sum = 0.0;
+    int n_neighs = 0;
+
+    if (i > 0) { // down
+        n_neighs++;
+        double t1 = blk.cells[(i-1)*sz+j].temp[cur_temp_idx];
+        if (USE_SIMPLE_FLOWS) {
+            flows_this_block_sum += t1;
+        } else {
+            flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
+        }
+    }
+    if (i < sz-1) { // up
+        n_neighs++;
+        double t1 = blk.cells[(i+1)*sz+j].temp[cur_temp_idx];
+        if (USE_SIMPLE_FLOWS) {
+            flows_this_block_sum += t1;
+        } else {
+            flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
+        }
+    }
+    if (j > 0) { // left
+        n_neighs++;
+        double t1 = blk.cells[i*sz+(j-1)].temp[cur_temp_idx];
+        if (USE_SIMPLE_FLOWS) {
+            flows_this_block_sum += t1;
+        } else {
+            flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
+        }
+    }
+    if (j < sz - 1) { // right
+        n_neighs++;
+        double t1 = blk.cells[i*sz+(j+1)].temp[cur_temp_idx];
+        if (USE_SIMPLE_FLOWS) {
+            flows_this_block_sum += t1;
+        } else {
+            flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
+        }
+    }
+
+    return std::pair<double,int>(flows_this_block_sum, n_neighs);
+}
+
+std::pair<double,int> Proc::compute_border_flows_for_border_cell(BlockOfCells& blk, int i, int j) {
+    int cur_temp_idx = (time_step_n-1) % 2;
+    double t0 = blk.cells[i*blk.sz+j].temp[cur_temp_idx];
+
+    double x, y;
+    blk.get_spacial_coords(i, j, &x, &y);
+
+    double d = get_lvl_dx(blk.cells_lvl);
+    double l = d;
+    
+    double flows_borders_sum = 0.0;
+    int n_neighs = 0;
+
+    char border_cond_type;
+    double (*cond_func)(double, double, double);
+    for (int border_dir = DOWN; border_dir != END; border_dir++) {
+        if (is_cell_on_area_border(blk, i, j, Neigh(border_dir))) {
+            stat.timers["get_border_cond"].Start();
+            get_border_cond(&border_cond_type, &cond_func, Neigh(border_dir));
+            stat.timers["get_border_cond"].Stop();
+
+            double t1 = cond_func(x+d/2, y, time_step_n * tau);
+            if (border_cond_type == 1) {
+                if (USE_SIMPLE_FLOWS) {
+                    flows_borders_sum += t1;
+                    n_neighs++;
+                } else {
+                    flows_borders_sum += - Area::a * (t1 - t0) / (d/2) * l;
+                }
+            } 
+            // else if (border_cond_type == 2) {
+            //     flows_borders_sum += t1;
+            // }
+        }
+    }
+
+    return std::pair<double,int>(flows_borders_sum, n_neighs);
+}
+
+vector<Neigh> Proc::get_possible_adjacent_blocks_dirs_for_cell(BlockOfCells& blk, int i, int j) {
+    vector<Neigh> dirs;
+    if (i == 0) {
+        dirs.push_back(DOWN);
+    }
+    if (i == blk.sz - 1) {
+        dirs.push_back(UP);
+    }
+    if (j == 0) {
+        dirs.push_back(LEFT);
+    }
+    if (j == blk.sz - 1) {
+        dirs.push_back(RIGHT);
+    }
+
+    return dirs;
+}
+
+vector<GlobalNumber_t> get_possible_adjacent_blocks(BlockOfCells& blk, Neigh neigh_dir) {
+    switch(neigh_dir) {
+    case LEFT:
+        return blk.neighs_left_idxs;
+    case RIGHT:
+        return blk.neighs_right_idxs;
+    case UP:
+        return blk.neighs_upper_idxs;
+    case DOWN:
+        return blk.neighs_down_idxs;
+    default:
+        return vector<GlobalNumber_t>();
+    }
+}
+
+std::pair<double,int> Proc::compute_interblock_flows_for_border_cell(BlockOfCells& blk, int i, int j) {
+    double flows_other_blocks_sum = 0.0;
+    int n_neighs = 0;
+
+    vector<Neigh> dirs = get_possible_adjacent_blocks_dirs_for_cell(blk, i, j);
+    for (Neigh dir : dirs) {
+        if (dir == DOWN) {
+            cout << "computing DOWN border interblock flows neighs_down_sz=" << blk.neighs_down_idxs.size() << endl;
+        }
+        std::pair<double,int> tmp_pair = compute_interblock_flows_for_border_cell(blk, i, j, dir);
+        flows_other_blocks_sum += tmp_pair.first;
+        n_neighs += tmp_pair.second;
+    }
+
+    return std::pair<double,int>(flows_other_blocks_sum, n_neighs);
+} 
+
+std::pair<double,int> Proc::compute_interblock_flows_for_border_cell(BlockOfCells& blk, int i, int j, Neigh neigh_dir) {
+    int cur_temp_idx = (time_step_n-1) % 2;
+    int sz = blk.sz;
+
+    double d = get_lvl_dx(blk.cells_lvl);
+    double l = d;
+
+    double t0 = blk.cells[i*sz+j].temp[cur_temp_idx];
+
+
+    double flows_other_blocks_sum = 0.0;
+    int n_neighs = 0;
+
+    GlobalNumber_t c_glob_idx = get_cell_global_number_in_full_grid(blk.idx.get_global_number(), (sz-1), j, blk.cells_lvl);
+    vector<GlobalNumber_t> n_blks_is = get_possible_adjacent_blocks(blk, neigh_dir);
+    for (int nb_i = 0; nb_i < n_blks_is.size(); nb_i++) {
+        GlobalNumber_t n_blk_i = n_blks_is[nb_i];
+        int n_blk_owner = find_owner(n_blk_i);
+        bool is_my_blk = (n_blk_owner == mpiInfo.comm_rank);
+        BlockOfCells *n_blk = is_my_blk ? mesh.find_block(n_blk_i) : fake_ghost_blocks[n_blk_i];
+        vector<GlobalNumber_t> cell_neighs = find_cell_neighs_ids_in_blk(c_glob_idx, blk.cells_lvl, n_blk, neigh_dir);
+        for (int nc_i = 0; nc_i < cell_neighs.size(); nc_i++) {
+            GlobalNumber_t cc = cell_neighs[nc_i];
+            double t1 = 0.0;
+            // если уровень ячеек в этом соседнем блоке больше, то ячейки там меньше, то длина грани -- половинка
+            if (n_blk->cells_lvl > blk.cells_lvl) {
+                l = l / 2;
+            }
+
+            bool found = false;
+            if (is_my_blk) {
+                SimpleCell *c = n_blk->find_border_cell_by_global_idx(cc);
+                t1 = c->temp[cur_temp_idx];
+                found = true;
+            } else {
+                for (int k = 0; k < cells_in_idxs[n_blk_owner].size(); k++) {
+                    if (cells_in_idxs[n_blk_owner][k] == cc) {
+                        t1 = cells_in_idxs_temps[n_blk_owner][k];
+                        found = true;
+                    }
+                }
+            }
+            if (found) {
+                if (USE_SIMPLE_FLOWS) {
+                    flows_other_blocks_sum += t1;
+                    n_neighs++;
+                } else {
+                    flows_other_blocks_sum += - Area::a * (t1 - t0) / d * l;
+                }
+            }
+        }
+    }
+
+    return std::pair<double,int>(flows_other_blocks_sum, n_neighs);
+}
+
+void Proc::process_block_border_cell(BlockOfCells& blk, int i, int j) {
+    int cur_temp_idx = (time_step_n-1) % 2;
+    int next_temp_idx = (cur_temp_idx + 1) % 2;
+
+    double d = get_lvl_dx(blk.cells_lvl);
+    double S = d * d;
+
+    double flows_sum = 0.0;
+    int n_neighs = 0;
+
+    // Потоки: 
+    //   1) от соседних ячеек в этом же блоке
+    //   2) от границ области
+    //   3) от соседних ячеек в других блоках (на этом же проце или нет)
+
+    // neighs in this block
+    std::pair<double, int> tmp_pair = compute_inblock_flows_for_border_cell(blk, i, j);
+    flows_sum += tmp_pair.first;
+    n_neighs += tmp_pair.second;
+    
+
+    // border flows
+    tmp_pair = compute_border_flows_for_border_cell(blk, i, j);
+    flows_sum += tmp_pair.first;
+    n_neighs += tmp_pair.second;
+
+    // neighs in other blocks
+    tmp_pair = compute_interblock_flows_for_border_cell(blk, i, j);
+    flows_sum += tmp_pair.first;
+    n_neighs += tmp_pair.second;
+
+
+    // result
+    double x, y;
+    blk.get_spacial_coords(i, j, &x, &y);
+    double q = Area::Q(x, y, tau * time_step_n);
+
+    int c_blk_num = i*blk.sz+j;
+    double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
+    if (USE_SIMPLE_FLOWS) {
+        blk.cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
+    } else {
+        blk.cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
+    }
+}
+
+
 
 void Proc::get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border) {
     if (border == DOWN) {

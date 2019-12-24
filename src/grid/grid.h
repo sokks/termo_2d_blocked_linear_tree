@@ -36,7 +36,7 @@ void split_ints(GlobalNumber_t c, int *a, int *b);
 void split_ints(GlobalNumber_t c, int max_lvl, int *a, int *b);
 
 
-enum Neigh   { DOWN, UP, LEFT, RIGHT };
+enum Neigh   { DOWN, UP, LEFT, RIGHT, END };
 enum CornerNeigh { LU, RU, LD, RD };
 enum Child       { cLU, cRU, cLD, cRD };
 

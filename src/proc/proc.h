@@ -154,6 +154,15 @@ private:
     void build_needed_cells_for_blocks_map();
     void build_border_cells_neighs_ptrs();
 
+    void process_blocks_inner_cells();
+    void process_blocks_border_cells();
+    void process_block_border_cell(BlockOfCells& blk, int i, int j);
+    std::pair<double,int> compute_inblock_flows_for_border_cell(BlockOfCells& blk, int i, int j);
+    std::pair<double,int> compute_border_flows_for_border_cell(BlockOfCells& blk, int i, int j);
+    std::pair<double,int> compute_interblock_flows_for_border_cell(BlockOfCells& blk, int i, int j);
+    std::pair<double,int> compute_interblock_flows_for_border_cell(BlockOfCells& blk, int i, int j, Neigh neigh_dir);
+
+    vector<Neigh> get_possible_adjacent_blocks_dirs_for_cell(BlockOfCells& blk, int i, int j);
     void get_border_cond(char *cond_type, double (**cond_func)(double, double, double), Neigh border);
 
     void PrintMyBlocks();

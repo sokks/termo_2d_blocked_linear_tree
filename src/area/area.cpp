@@ -28,7 +28,7 @@ double Area::T0(double x, double y) {
     // return 0.05 * (1.0 / (sigma_x * sigma_y)) * exp( - ((x - mean_x)*(x - mean_x))/(2*sigma_x*sigma_x) - ((y - mean_y)*(y - mean_y))/(2*sigma_y*sigma_y) );
     
 
-    if ( x > x_end - (x_end-x_start)/64) {
+    if ( x > x_end - (x_end-x_start)/32) {
         return 1.0;
     }
     return 0.0;
@@ -141,9 +141,9 @@ double Area::Q(double x, double y, double t) {
     //     return 0.01;
     // }
 
-    if ( (x < x_end / 16) && (y < y_end / 16) ) {
-        return 1.0;
-    }
+    // if ( (x < x_end / 16) && (y < y_end / 16) ) {
+    //     return 1.0;
+    // }
 
     return 0;
 }

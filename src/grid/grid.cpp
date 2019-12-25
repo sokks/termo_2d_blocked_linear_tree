@@ -551,11 +551,11 @@ bool TreeIndex::is_border() {
             // is_left_upper_corner() || is_right_upper_corner() || is_left_down_corner() || is_right_down_corner();
 }
 
-
+// i -- Oy j -- Ox
 void TreeIndex::get_corner_coords(double *x, double *y) {
 //    double lvl_dx = min_dx * pow(2, max_lvl - lvl);
-    *x = min_dx * i;
-    *y = min_dx * j;
+    *x = min_dx * j;
+    *y = min_dx * i;
 }
 
 
@@ -565,10 +565,11 @@ double dist(double x1, double y1, double x2, double y2) {
     return sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
 }
 
+// i -- Oy j -- Ox
 void Cell::get_spacial_coords(double *x, double *y) {
     double lvl_dx = min_dx * pow(2, max_lvl - lvl);
-    *x = min_dx * i + lvl_dx/2; 
-    *y = min_dx * j + lvl_dx/2; 
+    *x = min_dx * j + lvl_dx/2; 
+    *y = min_dx * i + lvl_dx/2; 
 }
 
 void Cell::get_border_cond(char *cond_type, double (**cond_func)(double, double, double)) {
@@ -629,14 +630,15 @@ void BlockOfCells::CreateCells(double (*Temp_func)(double, double)) {
     // cout << "CC new_size=" << cells.size() << endl;
 }
 
+// i -- Oy j -- Ox
 void BlockOfCells::get_spacial_coords(int i, int j, double *x, double *y) {
     double xx, yy;
     idx.get_corner_coords(&xx, &yy);
     // cout << "get_corner_coords(" << this->i << ") = (" << xx << "," << yy << ")\n"; 
 
     double lvl_dx = min_dx * pow(2, max_lvl - cells_lvl);
-    xx += i * lvl_dx + lvl_dx/2;
-    yy += j *lvl_dx + lvl_dx/2;
+    xx += j * lvl_dx + lvl_dx/2;
+    yy += i *lvl_dx + lvl_dx/2;
 
     *x = xx;
     *y = yy;
@@ -1290,7 +1292,7 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
     int neigh_lvl = blk->cells_lvl;
 
     // if (neigh_dir == DOWN) {
-    //     cout << "find_cell_neighs_ids_in_blk: cell_idx=" << cell_glob_idx << " cell_lvl=" << cell_lvl << " neigh_blk_idx=" << blk->idx.get_global_number() << " neigh_lvl=" << blk->cells_lvl << endl;
+    //     cout << "find_cell_neighs_ids_in_blk DOWN: cell_idx=" << cell_glob_idx << " cell_lvl=" << cell_lvl << " neigh_blk_idx=" << blk->idx.get_global_number() << " neigh_lvl=" << blk->cells_lvl << endl;
     // }
 
     if (abs(cell_lvl - neigh_lvl) > 1) {
@@ -1308,11 +1310,13 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
         neighs.push_back(c_idx.get_face_neighbor(neigh_dir));
     }
 
-    cout << "possible neighs: ";
-    for (auto nei: neighs) {
-        cout << nei.get_global_number() << " ";
-    }
-    cout << endl;
+    // if (neigh_dir == DOWN) {
+    //     cout << "possible neighs: ";
+    //     for (auto nei: neighs) {
+    //         cout << nei.get_global_number() << " ";
+    //     }
+    //     cout << endl;
+    // }
 
     vector<GlobalNumber_t> res;
     for (int jjj = 0; jjj < neighs.size(); jjj++) {
@@ -1321,6 +1325,14 @@ vector<GlobalNumber_t> find_cell_neighs_ids_in_blk(GlobalNumber_t cell_glob_idx,
             res.push_back(n);
         }
     }
+
+    // if (neigh_dir == DOWN) {
+    //     cout << "real neighs: ";
+    //     for (auto nei: res) {
+    //         cout << nei << " ";
+    //     }
+    //     cout << endl;
+    // }
 
     return res;
 }
@@ -1522,7 +1534,7 @@ void BlockedLinearTree::GenFromWriteBlocksStruct(vector<char> buf, double (*star
                 blk.neighs_right_idxs.push_back(tmp);
             }
         }
-        cout << endl;
+        // cout << endl;
 
         for (int j = 0; j < n_neighs; j++) {
             tmp = * ((GlobalNumber_t *)(&p[pos+upper_offset+j* sizeof(GlobalNumber_t)]));

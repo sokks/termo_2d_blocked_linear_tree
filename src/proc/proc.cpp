@@ -697,7 +697,7 @@ void Proc::process_blocks_inner_cells() {
         #ifdef USE_OPEN_MP
         thread_num = omp_get_thread_num();
         #endif
-        cout << "proc " << mpiInfo.comm_rank << " thread " << thread_num << endl;
+        // cout << "proc " << mpiInfo.comm_rank << " thread " << thread_num << endl;
 
         #ifdef USE_OPEN_MP
         # pragma omp for private(blk_i, i, j)

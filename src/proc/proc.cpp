@@ -927,11 +927,11 @@ std::pair<double,int> Proc::compute_interblock_flows_for_border_cell(BlockOfCell
     int n_neighs = 0;
 
     vector<Neigh> dirs = get_possible_adjacent_blocks_dirs_for_cell(blk, i, j);
-    for (Neigh dir : dirs) {
+    for (std::vector<Neigh>::iterator it = dirs.begin(); it != dirs.end(); it++) {
         // if (dir == DOWN) {
         //     cout << "computing DOWN border interblock flows ("<< i << "," << j<<") neighs_down_sz=" << blk.neighs_down_idxs.size() << endl;
         // }
-        std::pair<double,int> tmp_pair = compute_interblock_flows_for_border_cell(blk, i, j, dir);
+        std::pair<double,int> tmp_pair = compute_interblock_flows_for_border_cell(blk, i, j, *it);
         flows_other_blocks_sum += tmp_pair.first;
         n_neighs += tmp_pair.second;
     }

@@ -1103,14 +1103,16 @@ void Proc::WriteStat() {
     std::cout << "MpiInfo: " << mpiInfo.toString() << std::endl;
     double step = stat.timers["step"].FullDur();
     double compute_temps = stat.timers["compute_temps"].FullDur();
+    double compute_temps_border = stat.timers["compute_temps_border"].FullDur();
     double exchange_ghosts = stat.timers["exchange_ghosts"].FullDur();
     double build_ghosts = stat.timers["build_ghosts"].FullDur();
     double init_mesh = stat.timers["init_mesh"].FullDur();
 
-    double max_step, max_compute_temps, max_exchange_ghosts, max_build_ghosts, max_init_mesh;
+    double max_step, max_compute_temps, max_compute_temps_border, max_exchange_ghosts, max_build_ghosts, max_init_mesh;
 
     MPI_Reduce(&step, &max_step, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&compute_temps, &max_compute_temps, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
+    MPI_Reduce(&compute_temps_border, &max_compute_temps_border, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&exchange_ghosts, &max_exchange_ghosts, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&build_ghosts, &max_build_ghosts, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&init_mesh, &max_init_mesh, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
@@ -1118,6 +1120,7 @@ void Proc::WriteStat() {
     if (mpiInfo.comm_rank == 0) {
         cout << "\n\n\n\nSTAT| max_step: " << max_step
                 << " | max_compute_temps: " << max_compute_temps
+                << " | max_compute_temps_border: " << max_compute_temps_border
                 << " | max_exchange_ghosts: " << max_exchange_ghosts
                 << " | max_build_ghosts: " << max_build_ghosts
                 << " | max_init_mesh: " << max_init_mesh << " |\n\n\n\n" << endl; 

@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
     string filename_in  = argv[1];
     string filename_out = argv[2];
 
-    ifstream fin(filename_in, ios::binary);
+    ifstream fin(filename_in.c_str(), ios::binary);
 
     streampos fileSize;
     fin.seekg(0, std::ios::end);
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
 
     vector<WriteCell> cells = to_write_cells(buffer);
 
-    fout.open(filename_out);
+    fout.open(filename_out.c_str());
     write_txt_cells(cells);
 
     fin.close();
@@ -86,8 +86,8 @@ vector<WriteCell> to_write_cells(vector<char> buf) {
 }
 
 void write_txt_cells(vector<WriteCell> cells) {
-    for (WriteCell c: cells) {
-        fout << c.lvl << "," << c.i << "," << c.j << "," << c.blk << "," << c.proc << "," << c.temp << endl;
+    for (vector<WriteCell>::iterator cit = cells.begin(); cit != cells.end(); cit++) {
+        fout << cit->lvl << "," << cit->i << "," << cit->j << "," << cit->blk << "," << cit->proc << "," << cit->temp << endl;
     }
 }
 

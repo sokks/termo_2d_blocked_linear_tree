@@ -7,7 +7,7 @@ double Area::x_end = 1.0;
 double Area::y_end = 1.0;
 
 // double ro = 1190.0, lambda = 0.16, c = 900.0;
-double Area::ro = 1, Area::lambda = 0.1, Area::c = 1;
+double Area::ro = 1, Area::lambda = 0.01, Area::c = 1;
 double Area::a = lambda / (ro * c);
 // double a = 1;
 
@@ -98,8 +98,8 @@ void Area::get_border_cond(Border b, char *cond_type, double (**cond_func)(doubl
             // *cond_type = 2;
             // *cond_func = &BorderCond2;
             *cond_type = 1;
-            *cond_func = &BorderCond1;
-            // *cond_func = &BorderCondFixed1;
+            // *cond_func = &BorderCond1;
+            *cond_func = &BorderCondFixed1;
             break;
         }
         case UP: {

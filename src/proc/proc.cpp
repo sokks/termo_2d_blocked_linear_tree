@@ -70,6 +70,10 @@ Proc::Proc() {
     stat.timers["sort_neighs"] = MpiTimer();
     stat.timers["compute_temps"] = MpiTimer();
     stat.timers["compute_temps_border"] = MpiTimer();
+    stat.timers["compute_temps_border_inblock"] = MpiTimer();
+    stat.timers["compute_temps_border_edges"] = MpiTimer();
+    stat.timers["compute_temps_border_interblock"] = MpiTimer();
+    stat.timers["compute_temps_border_res"] = MpiTimer();
 
     time_step_n = 0;
     active_neighs_num = 0;
@@ -719,12 +723,12 @@ void Proc::process_blocks_inner_cells() {
                     int n_neighs = 4;
                     double t0 = mesh.blocks[blk_i].cells[i*sz+j].temp[cur_temp_idx];
 
-                    if (USE_SIMPLE_FLOWS) {
+                    #ifdef USE_SIMPLE_FLOWS
                         flows_sum += mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
                         flows_sum += mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
                         flows_sum += mesh.blocks[blk_i].cells[(i-1)*sz+j].temp[cur_temp_idx];
                         flows_sum += mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
-                    } else {
+                    #else
                         double t1 = mesh.blocks[blk_i].cells[i*sz+(j-1)].temp[cur_temp_idx];
                         flows_sum += - Area::a * (t1 - t0) / d * l;
                         t1 = mesh.blocks[blk_i].cells[i*sz+(j+1)].temp[cur_temp_idx];
@@ -733,7 +737,7 @@ void Proc::process_blocks_inner_cells() {
                         flows_sum += - Area::a * (t1 - t0) / d * l;
                         t1 = mesh.blocks[blk_i].cells[(i+1)*sz+j].temp[cur_temp_idx];
                         flows_sum += - Area::a * (t1 - t0) / d * l;
-                    }
+                    #endif
 
                     double x, y;
                     mesh.blocks[blk_i].get_spacial_coords(i, j, &x, &y);
@@ -741,13 +745,13 @@ void Proc::process_blocks_inner_cells() {
                     
                     // cout << "flows_sum=" << flows_sum << " q=" << q << "t_new=" << t0 + tau * (flows_sum + q) / S;
                     // cout << "internal block cells: t0=" << t0 << " flows_sum=" << flows_sum << " n_neighs=" << n_neighs << " q=" << q << endl;
-                    if (USE_SIMPLE_FLOWS) {
+                    #ifdef USE_SIMPLE_FLOWS
                         // просто среднее значение соседних ячеек + предыдущее значение в этой + источник
                         flows_sum *= Area::a;
                         mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-                    } else {
+                    #else
                         mesh.blocks[blk_i].cells[i*sz+j].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-                    }
+                    #endif
                 }
             }
         }
@@ -817,38 +821,38 @@ std::pair<double,int> Proc::compute_inblock_flows_for_border_cell(BlockOfCells& 
     if (i > 0) { // down
         n_neighs++;
         double t1 = blk.cells[(i-1)*sz+j].temp[cur_temp_idx];
-        if (USE_SIMPLE_FLOWS) {
+        #ifdef USE_SIMPLE_FLOWS
             flows_this_block_sum += t1;
-        } else {
+        #else
             flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
-        }
+        #endif
     }
     if (i < sz-1) { // up
         n_neighs++;
         double t1 = blk.cells[(i+1)*sz+j].temp[cur_temp_idx];
-        if (USE_SIMPLE_FLOWS) {
+        #ifdef USE_SIMPLE_FLOWS
             flows_this_block_sum += t1;
-        } else {
+        #else
             flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
-        }
+        #endif
     }
     if (j > 0) { // left
         n_neighs++;
         double t1 = blk.cells[i*sz+(j-1)].temp[cur_temp_idx];
-        if (USE_SIMPLE_FLOWS) {
+        #ifdef USE_SIMPLE_FLOWS
             flows_this_block_sum += t1;
-        } else {
+        #else
             flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
-        }
+        #endif
     }
     if (j < sz - 1) { // right
         n_neighs++;
         double t1 = blk.cells[i*sz+(j+1)].temp[cur_temp_idx];
-        if (USE_SIMPLE_FLOWS) {
+        #ifdef USE_SIMPLE_FLOWS
             flows_this_block_sum += t1;
-        } else {
+        #else
             flows_this_block_sum += - Area::a * (t1 - t0) / d * l;
-        }
+        #endif
     }
 
     return std::pair<double,int>(flows_this_block_sum, n_neighs);
@@ -877,12 +881,12 @@ std::pair<double,int> Proc::compute_border_flows_for_border_cell(BlockOfCells& b
 
             double t1 = cond_func(x+d/2, y, time_step_n * tau);
             if (border_cond_type == 1) {
-                if (USE_SIMPLE_FLOWS) {
+                #ifdef USE_SIMPLE_FLOWS
                     flows_borders_sum += t1;
                     n_neighs++;
-                } else {
+                #else
                     flows_borders_sum += - Area::a * (t1 - t0) / (d/2) * l;
-                }
+                #endif
             } 
             // else if (border_cond_type == 2) {
             //     flows_borders_sum += t1;
@@ -993,12 +997,12 @@ std::pair<double,int> Proc::compute_interblock_flows_for_border_cell(BlockOfCell
                 }
             }
             if (found) {
-                if (USE_SIMPLE_FLOWS) {
+                #ifdef USE_SIMPLE_FLOWS
                     flows_other_blocks_sum += t1;
                     n_neighs++;
-                } else {
+                #else
                     flows_other_blocks_sum += - Area::a * (t1 - t0) / d * l;
-                }
+                #endif
             }
         }
     }
@@ -1029,35 +1033,43 @@ void Proc::process_block_border_cell(BlockOfCells& blk, int i, int j) {
     //   3) от соседних ячеек в других блоках (на этом же проце или нет)
 
     // neighs in this block
+    // stat.timers["compute_temps_border_inblock"].Start();
     std::pair<double, int> tmp_pair = compute_inblock_flows_for_border_cell(blk, i, j);
     flows_sum += tmp_pair.first;
     n_neighs += tmp_pair.second;
+    // stat.timers["compute_temps_border_inblock"].Stop();
     
 
     // border flows
+    // stat.timers["compute_temps_border_edges"].Start();
     tmp_pair = compute_border_flows_for_border_cell(blk, i, j);
     flows_sum += tmp_pair.first;
     n_neighs += tmp_pair.second;
+    // stat.timers["compute_temps_border_edges"].Stop();
 
     // neighs in other blocks
+    // stat.timers["compute_temps_border_interblock"].Start();
     tmp_pair = compute_interblock_flows_for_border_cell(blk, i, j);
     flows_sum += tmp_pair.first;
     n_neighs += tmp_pair.second;
+    // stat.timers["compute_temps_border_interblock"].Stop();
 
 
     // result
+    // stat.timers["compute_temps_border_res"].Start();
     double x, y;
     blk.get_spacial_coords(i, j, &x, &y);
     double q = Area::Q(x, y, tau * time_step_n);
 
     int c_blk_num = i*blk.sz+j;
     double t0 = blk.cells[c_blk_num].temp[cur_temp_idx];
-    if (USE_SIMPLE_FLOWS) {
+    #ifdef USE_SIMPLE_FLOWS
         flows_sum *= Area::a;
         blk.cells[c_blk_num].temp[next_temp_idx] = t0 + flows_sum / n_neighs + q;
-    } else {
+    #else
         blk.cells[c_blk_num].temp[next_temp_idx] = t0 + tau * (flows_sum + q) / S;
-    }
+    #endif
+    // stat.timers["compute_temps_border_res"].Stop();
 }
 
 
@@ -1104,15 +1116,32 @@ void Proc::WriteStat() {
     double step = stat.timers["step"].FullDur();
     double compute_temps = stat.timers["compute_temps"].FullDur();
     double compute_temps_border = stat.timers["compute_temps_border"].FullDur();
+    double compute_temps_border_inblock = stat.timers["compute_temps_border_inblock"].FullDur();
+    double compute_temps_border_edges = stat.timers["compute_temps_border_edges"].FullDur();
+    double compute_temps_border_interblock = stat.timers["compute_temps_border_interblock"].FullDur();
+    double compute_temps_border_res = stat.timers["compute_temps_border_res"].FullDur();
     double exchange_ghosts = stat.timers["exchange_ghosts"].FullDur();
     double build_ghosts = stat.timers["build_ghosts"].FullDur();
     double init_mesh = stat.timers["init_mesh"].FullDur();
 
-    double max_step, max_compute_temps, max_compute_temps_border, max_exchange_ghosts, max_build_ghosts, max_init_mesh;
+    double max_step, 
+        max_compute_temps, 
+        max_compute_temps_border, 
+        max_compute_temps_border_inblock, 
+        max_compute_temps_border_edges, 
+        max_compute_temps_border_interblock, 
+        max_compute_temps_border_res, 
+        max_exchange_ghosts, 
+        max_build_ghosts, 
+        max_init_mesh;
 
     MPI_Reduce(&step, &max_step, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&compute_temps, &max_compute_temps, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&compute_temps_border, &max_compute_temps_border, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
+    MPI_Reduce(&compute_temps_border_inblock, &max_compute_temps_border_inblock, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
+    MPI_Reduce(&compute_temps_border_edges, &max_compute_temps_border_edges, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
+    MPI_Reduce(&compute_temps_border_interblock, &max_compute_temps_border_interblock, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
+    MPI_Reduce(&compute_temps_border_res, &max_compute_temps_border_res, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&exchange_ghosts, &max_exchange_ghosts, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&build_ghosts, &max_build_ghosts, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
     MPI_Reduce(&init_mesh, &max_init_mesh, 1, MPI_DOUBLE, MPI_MAX, 0, mpiInfo.comm);
@@ -1121,6 +1150,10 @@ void Proc::WriteStat() {
         cout << "\n\n\n\nSTAT| max_step: " << max_step
                 << " | max_compute_temps: " << max_compute_temps
                 << " | max_compute_temps_border: " << max_compute_temps_border
+                << " | max_compute_temps_border_inblock: " << max_compute_temps_border_inblock
+                << " | max_compute_temps_border_edges: " << max_compute_temps_border_edges
+                << " | max_compute_temps_border_interblock: " << max_compute_temps_border_interblock
+                << " | max_compute_temps_border_res: " << max_compute_temps_border_res
                 << " | max_exchange_ghosts: " << max_exchange_ghosts
                 << " | max_build_ghosts: " << max_build_ghosts
                 << " | max_init_mesh: " << max_init_mesh << " |\n\n\n\n" << endl; 

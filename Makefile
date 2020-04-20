@@ -8,8 +8,8 @@ OPTS=-O0 -std=c++11 -openmp
 # OPTS=-O0 -qsmp=omp
 RUN_OPTS=-m vn -env BG_MAXALIGNEXP=-1 -w 00:30:00
 
-BASE_LVL=8
-MAX_LVL=10
+BASE_LVL=7
+MAX_LVL=9
 BASE_BLK_LVL=3
 MAX_BLK_LVL=6
 
